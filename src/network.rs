@@ -5,32 +5,29 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver,Sender};
 use std::thread::JoinHandle;
 use std::sync::{Arc,Mutex};
+use std::iter::{Iterator,Map};
+use std::boxed::Box;
 
 #[derive(Debug)]
 pub struct Network {
-    nodes: HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)>,
-    pub statuses: HashMap<ID, Arc<Mutex<State>>>,
+    nodes: HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>)>,
     pub queue: VecDeque<Message>,
-    report_receiver: Receiver<(ID, Arc<Mutex<State>>)>,
 }
 
-fn create_nodes(size: usize) -> (HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)>, Receiver<(ID, Arc<Mutex<State>>)>) {
-    let (report_sender, report_rcv) = mpsc::channel();
-    let mut nodes: HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)> = HashMap::new();
+fn create_nodes(size: usize) -> HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>)> {
+    let mut nodes: HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>)> = HashMap::new();
     for i in 0..size {
-        nodes.insert(i as ID, Node::spawn(i as ID, report_sender.clone()));
+        nodes.insert(i as ID, Node::spawn(i as ID));
     }
-    return (nodes, report_rcv);
+    return nodes;
 }
 
 impl Network {
     pub fn new(size: usize, buffer_size: usize) -> Network {
-        let (nodes, report_receiver) = create_nodes(size);
+        let nodes = create_nodes(size);
         Network{
             nodes: nodes,
-            statuses: HashMap::new(),
             queue: VecDeque::with_capacity(buffer_size),
-            report_receiver: report_receiver,
         }
     }
 
@@ -57,7 +54,7 @@ impl Network {
     }
 
     fn send_to_node(&mut self, id: ID, req: Message) -> Result<bool, String> {
-        let maybe_node_data: Option<&(JoinHandle<Result<(), String>>, Sender<Message>)> = self.nodes.get(&id);
+        let maybe_node_data: Option<&(JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>)> = self.nodes.get(&id);
         match maybe_node_data {
             Some(node_data) => match node_data.1.send(req) {
                 Ok(()) => Ok(true),
@@ -69,22 +66,17 @@ impl Network {
 
     pub fn remove_node(&mut self, id: ID) -> Option<JoinHandle<Result<(), String>>> {
         let node_res = self.send_to_node(id, Message::shutdown(0 as ID, 0 as ID, Shutdown{}));
-        let tuple: Option<(JoinHandle<Result<(), String>>, Sender<Message>)> = match node_res {
+        let tuple: Option<(JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>)> = match node_res {
             Ok(_b) => self.nodes.remove(&id),
             Err(_e) => None,
         };
         tuple.map(|t| t.0)
     }
 
-    pub fn stop(&mut self) {
-        drop(&self.report_receiver);
+    pub fn get_statuses<'a>(&'a self) -> impl Iterator<Item = (&ID, &Arc<Mutex<State>>)> + 'a {
+        self.nodes.iter().map(|(id, v)| {
+            let (_h, _ch, status) = v;
+            (id, status)
+        })
     }
-
-    //pub fn gather_pending_reports(&mut self) {
-    //    for (id, state) in self.report_receiver.try_iter() {
-    //        self.statuses.insert(id, state);
-    //        //println!("{:?} {:?} new report", id, state);
-    //    }
-    //}
-
 }

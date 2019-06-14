@@ -10,9 +10,11 @@ use crate::dto::{ID,Commit,Num};
 use crate::node::{Message};
 use std::env;
 
-fn print_statuses(_net: &Network) {
+fn print_statuses(net: &Network) {
     println!("----- Statuses: ------");
-    _net.statuses.iter().for_each(|i| println!("{:?}", i));
+    net.get_statuses().for_each(|(id, v)| {
+        println!("{:?} {:?}", id, v);
+    });
     println!("----------------------");
 }
 
@@ -46,7 +48,6 @@ fn main() {
     let mut net = Network::new(5, 5);
     queue_requests(&mut net);
     for _i in 0..5 {
-        net.gather_pending_reports();
         print_queue(&net);
         print_statuses(&net);
         let _res = net.tick();

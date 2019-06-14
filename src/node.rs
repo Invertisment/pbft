@@ -26,7 +26,6 @@ pub struct Message {
 pub struct Node {
     id: ID,
     state: Arc<Mutex<State>>,
-    report_sender: Sender<(ID, Arc<Mutex<State>>)>,
 }
 
 impl Message {
@@ -63,16 +62,16 @@ impl Message {
 }
 
 impl Node {
-    pub fn spawn(id: ID, report_sender: Sender<(ID, Arc<Mutex<State>>)>) -> (JoinHandle<Result<(), String>>, Sender<Message>) {
+    pub fn spawn(id: ID) -> (JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>) {
         let (data_sender, data_receiver) = mpsc::channel();
+        let state = Arc::new(Mutex::new(Option::None));
+        let state_clone = state.clone();
         let join_handle = thread::spawn(
             move || {
                 let node = Node{
                     id: id,
-                    report_sender: report_sender.clone(),
-                    state: Arc::new(Mutex::new(Option::None)),
+                    state: state.clone(),
                 };
-                node.report_state();
                 for msg in data_receiver {
                     //println!("[{}] Received {:?}", node.id, msg);
                     let should_shutdown = node.handle(msg);
@@ -83,7 +82,7 @@ impl Node {
                 }
                 Ok(())
             });
-        (join_handle, data_sender)
+        (join_handle, data_sender, state_clone)
     }
 
     fn handle(&self, message: Message) -> bool {
@@ -91,18 +90,7 @@ impl Node {
             //print!("[{}] Received shutdown request", self.id);
             return true;
         }
-        self.report_state();
         return false;
-    }
-
-    fn report_state(&self) {
-        let res = self.report_sender.send((self.id, self.state.clone()));
-        match res {
-            Ok(_) => {},
-            Err(e) => {
-                println!("[{}] failed to report state: {}", self.id, e);
-            }
-        }
     }
 }
 
