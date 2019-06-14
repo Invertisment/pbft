@@ -1,19 +1,18 @@
-use crate::node::{Node,Message};
+use crate::node::{Node,Message,NodeCtrl};
 use crate::dto::{ID,State,Shutdown};
 use std::collections::{HashMap,VecDeque};
-use std::sync::mpsc::{Sender};
 use std::thread::JoinHandle;
 use std::sync::{Arc,Mutex};
 use std::iter::{Iterator};
 
 #[derive(Debug)]
 pub struct Network {
-    nodes: HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>)>,
+    nodes: HashMap<ID, NodeCtrl>,
     pub queue: VecDeque<Message>,
 }
 
-fn create_nodes(size: usize) -> HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>)> {
-    let mut nodes: HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>)> = HashMap::new();
+fn create_nodes(size: usize) -> HashMap<ID, NodeCtrl> {
+    let mut nodes: HashMap<ID, NodeCtrl> = HashMap::new();
     for i in 0..size {
         nodes.insert(i as ID, Node::spawn(i as ID));
     }
@@ -52,9 +51,9 @@ impl Network {
     }
 
     fn send_to_node(&mut self, id: ID, req: Message) -> Result<bool, String> {
-        let maybe_node_data: Option<&(JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>)> = self.nodes.get(&id);
+        let maybe_node_data: Option<&NodeCtrl> = self.nodes.get(&id);
         match maybe_node_data {
-            Some(node_data) => match node_data.1.send(req) {
+            Some(node_data) => match node_data.data_sender.send(req) {
                 Ok(()) => Ok(true),
                 Err(e) => Err(format!("Can't send: {:?}", e)),
             },
@@ -64,17 +63,16 @@ impl Network {
 
     pub fn remove_node(&mut self, id: ID) -> Option<JoinHandle<Result<(), String>>> {
         let node_res = self.send_to_node(id, Message::shutdown(0 as ID, 0 as ID, Shutdown{}));
-        let tuple: Option<(JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>)> = match node_res {
+        let tuple: Option<NodeCtrl> = match node_res {
             Ok(_b) => self.nodes.remove(&id),
             Err(_e) => None,
         };
-        tuple.map(|t| t.0)
+        tuple.map(|t| t.join_handle)
     }
 
     pub fn get_statuses<'a>(&'a self) -> impl Iterator<Item = (&ID, &Arc<Mutex<State>>)> + 'a {
-        self.nodes.iter().map(|(id, v)| {
-            let (_h, _ch, status) = v;
-            (id, status)
+        self.nodes.iter().map(|(id, node_ctrl)| {
+            (id, &node_ctrl.state)
         })
     }
 }

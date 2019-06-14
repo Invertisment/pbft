@@ -16,10 +16,10 @@ pub trait TargetNode {
 pub struct Message {
     pub sender_id: ID,
     pub target_id: ID,
-    preprepares: Vec<PrePrepare>,
-    prepares: Vec<Prepare>,
-    commits: Vec<Commit>,
-    shutdowns: Vec<Shutdown>,  // control packet
+    preprepare: Option<PrePrepare>,
+    prepare: Option<Prepare>,
+    commit: Option<Commit>,
+    shutdown: Option<Shutdown>,  // control packet
 }
 
 #[derive(Debug)]
@@ -33,36 +33,53 @@ impl Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
-            preprepares: vec![pp],
-            prepares: vec![],
-            commits: vec![],
-            shutdowns: vec![],
+            preprepare: Option::Some(pp),
+            prepare: Option::None,
+            commit: Option::None,
+            shutdown: Option::None,
+        }
+    }
+    pub fn prepare(sender_id: ID, target_id: ID, p: Prepare) -> Message {
+        Message{
+            sender_id: sender_id,
+            target_id: target_id,
+            preprepare: Option::None,
+            prepare: Option::Some(p),
+            commit: Option::None,
+            shutdown: Option::None,
         }
     }
     pub fn commit(sender_id: ID, target_id: ID, c: Commit) -> Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
-            preprepares: vec![],
-            prepares: vec![],
-            commits: vec![c],
-            shutdowns: vec![],
+            preprepare: Option::None,
+            prepare: Option::None,
+            commit: Option::Some(c),
+            shutdown: Option::None,
         }
     }
     pub fn shutdown(sender_id: ID, target_id: ID, s: Shutdown) -> Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
-            preprepares: vec![],
-            prepares: vec![],
-            commits: vec![],
-            shutdowns: vec![s],
+            preprepare: Option::None,
+            prepare: Option::None,
+            commit: Option::None,
+            shutdown: Option::Some(s),
         }
     }
 }
 
+#[derive(Debug)]
+pub struct NodeCtrl {
+    pub join_handle: JoinHandle<Result<(), String>>,
+    pub data_sender: Sender<Message>,
+    pub state: Arc<Mutex<State>>,
+}
+
 impl Node {
-    pub fn spawn(id: ID) -> (JoinHandle<Result<(), String>>, Sender<Message>, Arc<Mutex<State>>) {
+    pub fn spawn(id: ID) -> NodeCtrl {
         let (data_sender, data_receiver) = mpsc::channel();
         let state = Arc::new(Mutex::new(Option::None));
         let state_clone = state.clone();
@@ -82,11 +99,15 @@ impl Node {
                 }
                 Ok(())
             });
-        (join_handle, data_sender, state_clone)
+        NodeCtrl{
+            join_handle: join_handle,
+            data_sender: data_sender,
+            state: state_clone
+        }
     }
 
     fn handle(&self, message: Message) -> bool {
-        for _e in message.shutdowns {
+        for _e in message.shutdown {
             //print!("[{}] Received shutdown request", self.id);
             return true;
         }
