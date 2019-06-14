@@ -1,10 +1,10 @@
-use crate::network::{Request};
-use std::collections::{HashMap};
-use crate::node::{Node};
+use std::option::Option;
+
 pub type ID = u64;
 pub type Num = i64;
 pub type Sig = String; // Signature
 pub type Digest = String; // Hash of something
+pub type State = Option<String>; // current progress of Nodes
 
 /*
 Parameters:
@@ -19,7 +19,7 @@ pub struct PrePrepare {
     seq_num: ID,     // n
     digest: Digest,  // d -- digest for m
     signature: Sig,  // sigma(p) -- sig of primary node
-    message: Num, // m
+    message: Num,    // m
 }
 
 #[derive(Debug)]
@@ -58,9 +58,5 @@ impl Commit {
     }
 }
 
-impl Request for Commit {
-    fn execute(&self, _nodes: &HashMap<Num,Node>)-> bool {
-        println!("[{}] sends Commit with signature {}", self.node_num, self.signature);
-        return true;
-    }
-}
+#[derive(Debug)]
+pub struct Shutdown {}
