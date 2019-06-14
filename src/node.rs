@@ -72,10 +72,10 @@ impl Node {
                     state: Option::None,
                 };
                 for msg in data_receiver {
-                    println!("[{}] Received {:?}", node.id, msg);
+                    //println!("[{}] Received {:?}", node.id, msg);
                     let should_shutdown = node.handle(msg);
                     if should_shutdown {
-                        print!("Shutdown");
+                        print!("[{}] Shutdown", node.id);
                         break;
                     }
                 }
@@ -86,7 +86,7 @@ impl Node {
 
     fn handle(&self, message: Message) -> bool {
         for _e in message.shutdowns {
-            print!("[{}] Received shutdown request", self.id);
+            //print!("[{}] Received shutdown request", self.id);
             return true;
         }
         return false;
@@ -95,6 +95,6 @@ impl Node {
 
 impl Drop for Node {
     fn drop(&mut self) {
-        println!("Dropping Node {}!", self.id);
+        //println!("Dropping Node {}!", self.id);
     }
 }

@@ -8,12 +8,11 @@ use std::thread::JoinHandle;
 #[derive(Debug)]
 pub struct Network {
     nodes: HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)>,
-    statuses: HashMap<ID, String>,
-    queue: VecDeque<Message>,
+    pub statuses: HashMap<ID, String>,
+    pub queue: VecDeque<Message>,
 }
 
-// TODO: This message lifetime probably will cause a memory leak
-fn create_nodes<'l>(size: usize) -> (HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)>, Receiver<State>) {
+fn create_nodes(size: usize) -> (HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)>, Receiver<State>) {
     let (report_sender, report_rcv) = mpsc::channel();
     let mut nodes: HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)> = HashMap::new();
     for i in 0..size {
