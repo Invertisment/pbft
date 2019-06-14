@@ -8,6 +8,7 @@ mod network_test;
 use network::Network;
 use crate::dto::{ID,Commit,Num};
 use crate::node::{Message};
+use std::env;
 
 fn print_statuses(_net: &Network) {
     println!("----- Statuses: ------");
@@ -31,13 +32,26 @@ fn queue_requests(net: &mut Network) {
     }
 }
 
+fn is_interactive_ui(args: &mut env::Args) -> bool {
+    args.any(|arg| arg == "--ui")
+}
+
 fn main() {
     println!("Hello, world!");
+    if is_interactive_ui(&mut env::args()) {
+        interactive_mode();
+        return
+    }
+    println!("To run with interactive UI add option '--ui'");
     let mut net = Network::new(5, 5);
     queue_requests(&mut net);
     for _i in 0..5 {
+        net.gather_pending_reports();
         print_queue(&net);
         print_statuses(&net);
         let _res = net.tick();
     }
+}
+
+fn interactive_mode() {
 }

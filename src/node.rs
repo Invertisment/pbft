@@ -1,9 +1,10 @@
 use crate::dto::{PrePrepare,Prepare,Commit,ID,State,Shutdown};
 use std::sync::mpsc;
-use std::sync::mpsc::{Sender};
+use std::sync::mpsc::{Sender,SendError};
 use std::option::Option;
 use std::thread;
 use std::thread::JoinHandle;
+use std::sync::{Arc,Mutex};
 
 pub trait TargetNode {
     fn send_pre_prepare(&self, _req: PrePrepare) -> bool;
@@ -18,14 +19,14 @@ pub struct Message {
     preprepares: Vec<PrePrepare>,
     prepares: Vec<Prepare>,
     commits: Vec<Commit>,
-    shutdowns: Vec<Shutdown>,
+    shutdowns: Vec<Shutdown>,        // control
 }
 
 #[derive(Debug)]
 pub struct Node {
     id: ID,
-    state: State,
-    report_sender: Sender<State>,
+    state: Arc<Mutex<State>>,
+    report_sender: Sender<(ID, Arc<Mutex<State>>)>,
 }
 
 impl Message {
@@ -62,15 +63,16 @@ impl Message {
 }
 
 impl Node {
-    pub fn spawn(id: ID, report_sender: Sender<State>) -> (JoinHandle<Result<(), String>>, Sender<Message>) {
+    pub fn spawn(id: ID, report_sender: Sender<(ID, Arc<Mutex<State>>)>) -> (JoinHandle<Result<(), String>>, Sender<Message>) {
         let (data_sender, data_receiver) = mpsc::channel();
         let join_handle = thread::spawn(
             move || {
                 let node = Node{
                     id: id,
                     report_sender: report_sender.clone(),
-                    state: Option::None,
+                    state: Arc::new(Mutex::new(Option::None)),
                 };
+                node.report_state();
                 for msg in data_receiver {
                     //println!("[{}] Received {:?}", node.id, msg);
                     let should_shutdown = node.handle(msg);
@@ -89,7 +91,18 @@ impl Node {
             //print!("[{}] Received shutdown request", self.id);
             return true;
         }
+        self.report_state();
         return false;
+    }
+
+    fn report_state(&self) {
+        let res = self.report_sender.send((self.id, self.state.clone()));
+        match res {
+            Ok(_) => {},
+            Err(e) => {
+                println!("[{}] failed to report state: {}", self.id, e);
+            }
+        }
     }
 }
 

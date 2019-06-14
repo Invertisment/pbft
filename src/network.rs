@@ -4,15 +4,17 @@ use std::collections::{HashMap,VecDeque};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver,Sender};
 use std::thread::JoinHandle;
+use std::sync::{Arc,Mutex};
 
 #[derive(Debug)]
 pub struct Network {
     nodes: HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)>,
-    pub statuses: HashMap<ID, String>,
+    pub statuses: HashMap<ID, Arc<Mutex<State>>>,
     pub queue: VecDeque<Message>,
+    report_receiver: Receiver<(ID, Arc<Mutex<State>>)>,
 }
 
-fn create_nodes(size: usize) -> (HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)>, Receiver<State>) {
+fn create_nodes(size: usize) -> (HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)>, Receiver<(ID, Arc<Mutex<State>>)>) {
     let (report_sender, report_rcv) = mpsc::channel();
     let mut nodes: HashMap<ID, (JoinHandle<Result<(), String>>, Sender<Message>)> = HashMap::new();
     for i in 0..size {
@@ -23,11 +25,12 @@ fn create_nodes(size: usize) -> (HashMap<ID, (JoinHandle<Result<(), String>>, Se
 
 impl Network {
     pub fn new(size: usize, buffer_size: usize) -> Network {
-        let (nodes, _report_rcv) = create_nodes(size);
+        let (nodes, report_receiver) = create_nodes(size);
         Network{
             nodes: nodes,
             statuses: HashMap::new(),
             queue: VecDeque::with_capacity(buffer_size),
+            report_receiver: report_receiver,
         }
     }
 
@@ -72,4 +75,16 @@ impl Network {
         };
         tuple.map(|t| t.0)
     }
+
+    pub fn stop(&mut self) {
+        drop(&self.report_receiver);
+    }
+
+    //pub fn gather_pending_reports(&mut self) {
+    //    for (id, state) in self.report_receiver.try_iter() {
+    //        self.statuses.insert(id, state);
+    //        //println!("{:?} {:?} new report", id, state);
+    //    }
+    //}
+
 }
