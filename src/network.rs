@@ -1,12 +1,10 @@
 use crate::node::{Node,Message};
 use crate::dto::{ID,State,Shutdown};
 use std::collections::{HashMap,VecDeque};
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver,Sender};
+use std::sync::mpsc::{Sender};
 use std::thread::JoinHandle;
 use std::sync::{Arc,Mutex};
-use std::iter::{Iterator,Map};
-use std::boxed::Box;
+use std::iter::{Iterator};
 
 #[derive(Debug)]
 pub struct Network {

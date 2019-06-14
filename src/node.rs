@@ -1,6 +1,6 @@
 use crate::dto::{PrePrepare,Prepare,Commit,ID,State,Shutdown};
 use std::sync::mpsc;
-use std::sync::mpsc::{Sender,SendError};
+use std::sync::mpsc::{Sender};
 use std::option::Option;
 use std::thread;
 use std::thread::JoinHandle;
@@ -19,7 +19,7 @@ pub struct Message {
     preprepares: Vec<PrePrepare>,
     prepares: Vec<Prepare>,
     commits: Vec<Commit>,
-    shutdowns: Vec<Shutdown>,        // control
+    shutdowns: Vec<Shutdown>,  // control packet
 }
 
 #[derive(Debug)]
