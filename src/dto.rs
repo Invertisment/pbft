@@ -4,7 +4,7 @@ pub type ID = u64;
 pub type Num = i64;
 pub type Sig = String; // Signature
 pub type Digest = String; // Hash of something
-pub type State = Option<String>; // current progress of Nodes
+pub type Tip = Option<String>; // current progress of Nodes
 
 /*
 Parameters:

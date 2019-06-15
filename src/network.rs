@@ -1,5 +1,5 @@
-use crate::node::{Node,Message,NodeCtrl};
-use crate::dto::{ID,State,Shutdown};
+use crate::node::{Node,Message,NodeCtrl,State};
+use crate::dto::{ID,Shutdown};
 use std::collections::{HashMap,VecDeque};
 use std::thread::JoinHandle;
 use std::sync::{Arc,Mutex};

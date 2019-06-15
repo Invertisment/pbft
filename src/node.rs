@@ -1,10 +1,11 @@
-use crate::dto::{PrePrepare,Prepare,Commit,ID,State,Shutdown};
+use crate::dto::{PrePrepare,Prepare,Commit,ID,Tip,Shutdown};
 use std::sync::mpsc;
-use std::sync::mpsc::{Sender};
+use std::sync::mpsc::{Sender,Receiver};
 use std::option::Option;
 use std::thread;
 use std::thread::JoinHandle;
 use std::sync::{Arc,Mutex};
+use std::collections::HashMap;
 
 pub trait TargetNode {
     fn send_pre_prepare(&self, _req: PrePrepare) -> bool;
@@ -20,6 +21,14 @@ pub struct Message {
     prepare: Option<Prepare>,
     commit: Option<Commit>,
     shutdown: Option<Shutdown>,  // control packet
+}
+
+#[derive(Debug)]
+pub struct State {
+    tip: Tip, // current consensus viewpoint of the node
+    preprepares: HashMap<ID, PrePrepare>,
+    prepares: HashMap<ID, Prepare>,
+    commits: HashMap<ID, Commit>,
 }
 
 #[derive(Debug)]
@@ -81,7 +90,7 @@ pub struct NodeCtrl {
 impl Node {
     pub fn spawn(id: ID) -> NodeCtrl {
         let (data_sender, data_receiver) = mpsc::channel();
-        let state = Arc::new(Mutex::new(Option::None));
+        let state = State::genesis();
         let state_clone = state.clone();
         let join_handle = thread::spawn(
             move || {
@@ -89,15 +98,7 @@ impl Node {
                     id: id,
                     state: state.clone(),
                 };
-                for msg in data_receiver {
-                    //println!("[{}] Received {:?}", node.id, msg);
-                    let should_shutdown = node.handle(msg);
-                    if should_shutdown {
-                        print!("[{}] Shutdown", node.id);
-                        break;
-                    }
-                }
-                Ok(())
+                node.handle_all_requests(data_receiver)
             });
         NodeCtrl{
             join_handle: join_handle,
@@ -106,17 +107,43 @@ impl Node {
         }
     }
 
-    fn handle(&self, message: Message) -> bool {
-        for _e in message.shutdown {
-            //print!("[{}] Received shutdown request", self.id);
-            return true;
+    fn handle_all_requests(&self, data_receiver: Receiver<Message>) -> Result<(), String> {
+        for msg in data_receiver {
+            //println!("[{}] Received {:?}", node.id, msg);
+            let should_shutdown = self.handle_control_message(&msg);
+            if should_shutdown {
+                print!("[{}] Shutdown", self.id);
+                break;
+            }
+            self.handle_protocol_message(&msg);
         }
-        return false;
+        Ok(())
     }
+
+    fn handle_control_message(&self, message: &Message) -> bool {
+        //print!("[{}] Received shutdown request", self.id);
+        message.shutdown.is_some()
+    }
+
+    fn handle_protocol_message(&self, _message: &Message) {
+        // TODO
+    }
+
 }
 
 impl Drop for Node {
     fn drop(&mut self) {
         //println!("Dropping Node {}!", self.id);
+    }
+}
+
+impl State {
+    pub fn genesis() -> Arc<Mutex<State>> {
+        Arc::new(Mutex::new(State{
+            tip: Option::None,
+            preprepares: HashMap::new(),
+            prepares: HashMap::new(),
+            commits: HashMap::new(),
+        }))
     }
 }
