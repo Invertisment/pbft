@@ -8,12 +8,12 @@ use std::iter::{Iterator};
 #[derive(Debug)]
 pub struct Network {
     nodes: HashMap<ID, NodeCtrl>,
-    pub queue: VecDeque<Message>,
+    queue: VecDeque<Message>,
 }
 
 fn create_nodes(size: usize) -> HashMap<ID, NodeCtrl> {
     let mut nodes: HashMap<ID, NodeCtrl> = HashMap::new();
-    for i in 0..size {
+   for i in 0..size {
         nodes.insert(i as ID, Node::spawn(i as ID));
     }
     return nodes;
@@ -47,13 +47,13 @@ impl Network {
     }
 
     fn send(&mut self, req: Message) -> Result<bool, String> {
-        self.send_to_node(req.target_id, req)
+        self.send_to_node(req.get_target_id(), req)
     }
 
     fn send_to_node(&mut self, id: ID, req: Message) -> Result<bool, String> {
         let maybe_node_data: Option<&NodeCtrl> = self.nodes.get(&id);
         match maybe_node_data {
-            Some(node_data) => match node_data.data_sender.send(req) {
+            Some(node_data) => match node_data.get_data_sender().send(req) {
                 Ok(()) => Ok(true),
                 Err(e) => Err(format!("Can't send: {:?}", e)),
             },
@@ -67,12 +67,20 @@ impl Network {
             Ok(_b) => self.nodes.remove(&id),
             Err(_e) => None,
         };
-        tuple.map(|t| t.join_handle)
+        tuple.map(|t| t.get_join_handle())
     }
 
-    pub fn get_statuses<'a>(&'a self) -> impl Iterator<Item = (&ID, &Arc<Mutex<State>>)> + 'a {
+    pub fn get_statuses<'a>(&'a self) -> impl Iterator<Item = (&ID, Arc<Mutex<State>>)> + 'a {
         self.nodes.iter().map(|(id, node_ctrl)| {
-            (id, &node_ctrl.state)
+            (id, node_ctrl.get_state())
         })
+    }
+
+    pub fn get_node(&self, id: &ID) -> Option<&NodeCtrl> {
+        self.nodes.get(id)
+    }
+
+    pub fn get_queue<'a>(&'a self) -> impl Iterator<Item = &Message> + 'a {
+        self.queue.iter()
     }
 }

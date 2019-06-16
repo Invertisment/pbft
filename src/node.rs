@@ -1,40 +1,81 @@
-use crate::dto::{PrePrepare,Prepare,Commit,ID,Tip,Shutdown};
+use crate::dto::{PrePrepare,Prepare,Commit,ID,Tip,Shutdown,RequestIdentifier};
 use std::sync::mpsc;
 use std::sync::mpsc::{Sender,Receiver};
 use std::option::Option;
 use std::thread;
 use std::thread::JoinHandle;
-use std::sync::{Arc,Mutex};
+use std::sync::{Arc,Mutex,RwLock};
 use std::collections::HashMap;
-
-pub trait TargetNode {
-    fn send_pre_prepare(&self, _req: PrePrepare) -> bool;
-    fn send_prepare(&self, _req: Prepare) -> bool;
-    fn send_commit(&self, _req: Commit) -> bool;
-}
-
-#[derive(Debug)]
-pub struct Message {
-    pub sender_id: ID,
-    pub target_id: ID,
-    preprepare: Option<PrePrepare>,
-    prepare: Option<Prepare>,
-    commit: Option<Commit>,
-    shutdown: Option<Shutdown>,  // control packet
-}
+use std::result::{Result};
 
 #[derive(Debug)]
 pub struct State {
     tip: Tip, // current consensus viewpoint of the node
-    preprepares: HashMap<ID, PrePrepare>,
-    prepares: HashMap<ID, Prepare>,
-    commits: HashMap<ID, Commit>,
+    preprepares: HashMap<ID, Arc<RwLock<PrePrepare>>>,
+    prepares: HashMap<ID, Arc<RwLock<Prepare>>>,
+    commits: HashMap<ID, Arc<RwLock<Commit>>>,
+}
+
+impl State {
+    pub fn genesis() -> Arc<Mutex<State>> {
+        Arc::new(Mutex::new(State{
+            tip: Option::None,
+            preprepares: HashMap::new(),
+            prepares: HashMap::new(),
+            commits: HashMap::new(),
+        }))
+    }
+    pub fn get_preprepares(&self) -> &HashMap<ID, Arc<RwLock<PrePrepare>>> {
+        &self.preprepares
+    }
+
+    pub fn handle_protocol_message(&mut self, _message: &Message) {
+    }
+
+    pub fn get_view_and_seq(&mut self, message: &Message) -> Option<RequestIdentifier> {
+        let preprepare_arc = message.preprepare.get();
+        let preprepare_rwlock = preprepare_arc.read();
+        match preprepare_rwlock {
+            Ok(acquired) => {
+                match acquired.as_ref() {
+                    Some(pp) => {
+                        let pp: &PrePrepare = pp;
+                        Some(pp.get_id())
+                    },
+                    None => None,
+                }
+            },
+            Err(e) => {
+                println!("Error while trying to read message: {:?}", e);
+                None
+            }
+        }
+    }
+}
+
+// https://stackoverflow.com/a/35569079/2159808
+#[derive(Debug)]
+struct ArcOption<T>(Arc<RwLock<Option<T>>>);
+impl <T>ArcOption<T> {
+    pub fn empty() -> ArcOption<T> {
+        ArcOption(Arc::new(RwLock::new(Option::None)))
+    }
+    pub fn some(t: T) -> ArcOption<T> {
+        ArcOption(Arc::new(RwLock::new(Option::Some(t))))
+    }
+    pub fn get(&self) -> Arc<RwLock<Option<T>>> {
+        self.0.clone()
+    }
 }
 
 #[derive(Debug)]
-pub struct Node {
-    id: ID,
-    state: Arc<Mutex<State>>,
+pub struct Message {
+    sender_id: ID,
+    target_id: ID,
+    preprepare: ArcOption<PrePrepare>,
+    prepare: ArcOption<Prepare>,
+    commit: ArcOption<Commit>,
+    shutdown: ArcOption<Shutdown>,  // control packet
 }
 
 impl Message {
@@ -42,49 +83,52 @@ impl Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
-            preprepare: Option::Some(pp),
-            prepare: Option::None,
-            commit: Option::None,
-            shutdown: Option::None,
+            preprepare: ArcOption::some(pp),
+            prepare: ArcOption::empty(),
+            commit: ArcOption::empty(),
+            shutdown: ArcOption::empty(),
         }
     }
     pub fn prepare(sender_id: ID, target_id: ID, p: Prepare) -> Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
-            preprepare: Option::None,
-            prepare: Option::Some(p),
-            commit: Option::None,
-            shutdown: Option::None,
+            preprepare: ArcOption::empty(),
+            prepare: ArcOption::some(p),
+            commit: ArcOption::empty(),
+            shutdown: ArcOption::empty(),
         }
     }
     pub fn commit(sender_id: ID, target_id: ID, c: Commit) -> Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
-            preprepare: Option::None,
-            prepare: Option::None,
-            commit: Option::Some(c),
-            shutdown: Option::None,
+            preprepare: ArcOption::empty(),
+            prepare: ArcOption::empty(),
+            commit: ArcOption::some(c),
+            shutdown: ArcOption::empty(),
         }
     }
     pub fn shutdown(sender_id: ID, target_id: ID, s: Shutdown) -> Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
-            preprepare: Option::None,
-            prepare: Option::None,
-            commit: Option::None,
-            shutdown: Option::Some(s),
+            preprepare: ArcOption::empty(),
+            prepare: ArcOption::empty(),
+            commit: ArcOption::empty(),
+            shutdown: ArcOption::some(s),
         }
+    }
+
+    pub fn get_target_id(&self) -> ID {
+        self.target_id
     }
 }
 
 #[derive(Debug)]
-pub struct NodeCtrl {
-    pub join_handle: JoinHandle<Result<(), String>>,
-    pub data_sender: Sender<Message>,
-    pub state: Arc<Mutex<State>>,
+pub struct Node {
+    id: ID,
+    state: Arc<Mutex<State>>,
 }
 
 impl Node {
@@ -94,13 +138,13 @@ impl Node {
         let state_clone = state.clone();
         let join_handle = thread::spawn(
             move || {
-                let node = Node{
+                let node = Node {
                     id: id,
                     state: state.clone(),
                 };
                 node.handle_all_requests(data_receiver)
-            });
-        NodeCtrl{
+                });
+        NodeCtrl {
             join_handle: join_handle,
             data_sender: data_sender,
             state: state_clone
@@ -122,28 +166,40 @@ impl Node {
 
     fn handle_control_message(&self, message: &Message) -> bool {
         //print!("[{}] Received shutdown request", self.id);
-        message.shutdown.is_some()
+        let shutdown_msg_read_res_2 = &message.shutdown;
+        let shutdown_msg_read_res_3 = shutdown_msg_read_res_2.get();
+        let shutdown_msg_read_res_4 = shutdown_msg_read_res_3.read();
+        shutdown_msg_read_res_4.is_ok() && shutdown_msg_read_res_4.unwrap().is_some()
     }
 
-    fn handle_protocol_message(&self, _message: &Message) {
-        // TODO
+    fn handle_protocol_message(&self, message: &Message) {
+        match self.state.lock() {
+            Ok(mut guard) => {
+                (*guard).handle_protocol_message(message);
+            },
+            Err(e) => {
+                println!("[{}] Error while trying to acquire state: {:?}", self.id, e);
+            },
+        }
     }
 
 }
 
-impl Drop for Node {
-    fn drop(&mut self) {
-        //println!("Dropping Node {}!", self.id);
-    }
+#[derive(Debug)]
+pub struct NodeCtrl {
+    join_handle: JoinHandle<Result<(), String>>,
+    data_sender: Sender<Message>,
+    state: Arc<Mutex<State>>,
 }
 
-impl State {
-    pub fn genesis() -> Arc<Mutex<State>> {
-        Arc::new(Mutex::new(State{
-            tip: Option::None,
-            preprepares: HashMap::new(),
-            prepares: HashMap::new(),
-            commits: HashMap::new(),
-        }))
+impl NodeCtrl {
+    pub fn get_join_handle(self) -> JoinHandle<Result<(), String>> {
+        self.join_handle
+    }
+    pub fn get_data_sender(&self) -> Sender<Message>{
+        self.data_sender.clone()
+    }
+    pub fn get_state(&self) -> Arc<Mutex<State>>{
+        self.state.clone()
     }
 }

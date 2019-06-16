@@ -18,9 +18,9 @@ fn print_statuses(net: &Network) {
     println!("----------------------");
 }
 
-fn print_queue(_net: &Network) {
+fn print_queue<'l>(net: &Network) {
     println!("------- Queue: -------");
-    _net.queue.iter().for_each(|i| println!("{:?}", i));
+    net.get_queue().for_each(|i| println!("{:?}", i));
     println!("----------------------");
 }
 
@@ -30,7 +30,7 @@ fn queue_requests(net: &mut Network) {
             Message::commit(
                 100,
                 i as ID,
-                Commit::new(1, 1, String::from(format!("digest {}", i)), i as Num, String::from(format!("signature {}", i)))));
+                Commit::new(1, 1, String::from(format!("digest {}", i)), i as Num, i as ID)));
     }
 }
 

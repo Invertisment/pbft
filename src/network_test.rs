@@ -1,6 +1,6 @@
 
 #[cfg(test)]
-mod network_test {
+mod network_basic_test {
 
     use crate::dto::{ID,Commit,Num};
     use crate::node::{Message};
@@ -12,7 +12,7 @@ mod network_test {
             Message::commit(
                 100,
                 i as ID,
-                Commit::new(1, 1, String::from(format!("digest {}", i)), i as Num, String::from(format!("signature {}", i)))));
+                Commit::new(1, 1, String::from(format!("digest {}", i)), i as Num, i as ID)));
         }
     }
 
@@ -81,6 +81,54 @@ mod network_test {
             Ok(res) => assert!(!res),
             Err(e) => panic!(e),
         };
+    }
+
+}
+
+#[cfg(test)]
+mod network_interaction_test {
+    use crate::dto::{ID,PrePrepare};
+    use crate::node::{Message,NodeCtrl,State};
+    use crate::network::{Network};
+    use std::sync::{Mutex,Arc,RwLock};
+    use std::collections::HashMap;
+
+    fn get_preprepare_size(maybe_node: Option<&NodeCtrl>) -> Result<usize, String> {
+        if maybe_node.is_none() {
+            return Err("Node not found".to_owned());
+        }
+        let node = maybe_node.unwrap();
+        let state_mutex: Arc<Mutex<State>> = node.get_state();
+        let state_lock = state_mutex.lock();
+        if state_lock.is_err() {
+            return Err("Node not found".to_owned());
+        }
+        let state: std::sync::MutexGuard<'_, State, > = state_lock.unwrap();
+        let preprepares: &HashMap<ID, Arc<RwLock<PrePrepare>>> = state.get_preprepares();
+        Ok(preprepares.len())
+    }
+
+    #[test]
+    fn preprepare_should_reach_node() {
+        let mut net = Network::new(2, 5);
+        let sender = 1337 as ID;
+        let target = 1 as ID;
+        net.queue_add(Message::preprepare(
+            sender,
+            target,
+            PrePrepare::new(0, 0, "digest".to_owned(), sender, "message".to_owned())));
+        match get_preprepare_size(net.get_node(&target)) {
+            Ok(size) => assert_eq!(size, 0),
+            Err(msg) => panic!(msg),
+        }
+        match net.tick() {
+            Ok(res) => assert!(res),
+            Err(e) => panic!(e),
+        };
+        match get_preprepare_size(net.get_node(&target)) {
+            Ok(size) => assert_eq!(size, 1),
+            Err(msg) => panic!(msg),
+        }
     }
 
 }
