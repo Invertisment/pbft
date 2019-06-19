@@ -63,10 +63,10 @@ impl PrePrepare {
             message: message,    // m
         }
     }
-    pub fn get_view_num(&self) -> ID {
+    pub fn get_view(&self) -> ID {
         self.view_num
     }
-    pub fn get_seq_num(&self) -> ID {
+    pub fn get_seq(&self) -> ID {
         self.seq_num
     }
     pub fn get_digest(&self) -> &Digest {

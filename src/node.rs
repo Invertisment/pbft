@@ -5,26 +5,30 @@ use std::option::Option;
 use std::thread;
 use std::thread::JoinHandle;
 use std::sync::{Arc,Mutex,RwLock};
-use std::collections::HashMap;
+use std::collections::{HashMap,HashSet};
 use std::result::{Result};
+use crate::util::retain_others;
 
 #[derive(Debug)]
 pub struct State {
     tip: Tip, // current consensus viewpoint of the node
+    known_nodes: HashSet<ID>,
     preprepares: HashMap<ID, Arc<RwLock<PrePrepare>>>,
     prepares: HashMap<ID, Arc<RwLock<Prepare>>>,
     commits: HashMap<ID, Arc<RwLock<Commit>>>,
 }
 
 impl State {
-    pub fn genesis() -> Arc<Mutex<State>> {
+    pub fn genesis(known_nodes: HashSet<ID>) -> Arc<Mutex<State>> {
         Arc::new(Mutex::new(State{
             tip: Option::None,
             preprepares: HashMap::new(),
             prepares: HashMap::new(),
             commits: HashMap::new(),
+            known_nodes: known_nodes,
         }))
     }
+
     pub fn get_preprepares(&self) -> &HashMap<ID, Arc<RwLock<PrePrepare>>> {
         &self.preprepares
     }
@@ -132,9 +136,9 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn spawn(id: ID) -> NodeCtrl {
+    pub fn spawn(id: ID, known_nodes: &HashSet<ID>) -> NodeCtrl {
         let (data_sender, data_receiver) = mpsc::channel();
-        let state = State::genesis();
+        let state = State::genesis(retain_others(id, known_nodes));
         let state_clone = state.clone();
         let join_handle = thread::spawn(
             move || {
@@ -182,7 +186,6 @@ impl Node {
             },
         }
     }
-
 }
 
 #[derive(Debug)]

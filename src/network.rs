@@ -1,6 +1,6 @@
 use crate::node::{Node,Message,NodeCtrl,State};
 use crate::dto::{ID,Shutdown};
-use std::collections::{HashMap,VecDeque};
+use std::collections::{HashMap,HashSet,VecDeque};
 use std::thread::JoinHandle;
 use std::sync::{Arc,Mutex};
 use std::iter::{Iterator};
@@ -12,9 +12,10 @@ pub struct Network {
 }
 
 fn create_nodes(size: usize) -> HashMap<ID, NodeCtrl> {
+    let node_ids: &HashSet<ID> = &(0..size as ID).into_iter().collect();
     let mut nodes: HashMap<ID, NodeCtrl> = HashMap::new();
-   for i in 0..size {
-        nodes.insert(i as ID, Node::spawn(i as ID));
+    for i in node_ids {
+        nodes.insert(*i, Node::spawn(*i, node_ids));
     }
     return nodes;
 }
