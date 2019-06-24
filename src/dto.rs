@@ -1,7 +1,6 @@
 use std::option::Option;
 
 pub type ID = u64;
-pub type Num = i64;
 pub type Sig = ID; // Signature. ID of the node that signed it. invalid ID -> nobody signed it.
 pub type Digest = String; // Hash of something
 pub type TipMessage = String; // current progress of Nodes
@@ -25,26 +24,30 @@ pub struct PrePrepare {
 
 #[derive(Debug)]
 pub struct Prepare {
-    view_num: Num,    // v
-    seq_num: Num,     // n
+    view_num: ID,    // v
+    seq_num: ID,     // n
     digest: Digest,  // d -- digest for m
-    node_num: Num,    // i
+    node_num: ID,    // i
     signature: Sig,  // sigma(i) -- Sig of sending node
 }
 
 #[derive(Debug)]
 pub struct Commit {
-    view_num: Num,    // v
-    seq_num: Num,     // n
+    view_num: ID,    // v
+    seq_num: ID,     // n
     digest: Digest,  // d -- digest for m
-    node_num: Num,    // i
+    node_num: ID,    // i
     signature: Sig,  // sigma(i) -- Sig of sending node
 }
 
-#[derive(Debug)]
-pub struct RequestIdentifier {
-    view_num: ID,    // v
-    seq_num: ID,     // n
+pub trait Request {
+    fn get_view_num(&self) -> ID;   // v
+    fn get_seq_num(&self) -> ID;    // n
+    fn get_digest(&self) -> Digest; // n
+}
+
+pub trait NodeRequest: Request {
+    fn get_node_id(&self) -> ID; // sigma(p) -- sig of primary node
 }
 
 impl PrePrepare {
@@ -78,20 +81,14 @@ impl PrePrepare {
     pub fn get_message(&self) -> &TipMessage {
         &self.message
     }
-    pub fn get_id(&self) -> RequestIdentifier {
-        RequestIdentifier{
-            view_num: self.view_num,
-            seq_num: self.seq_num,
-        }
-    }
 }
 
 impl Commit {
     pub fn new(
-        view_num: Num,    // v
-        seq_num: Num,     // n
+        view_num: ID,    // v
+        seq_num: ID,     // n
         digest: Digest,  // d -- digest for m
-        node_num: Num,    // i
+        node_num: ID,    // i
         signature: Sig,  // sigma(i) -- Sig of sending node
     ) -> Commit {
         Commit{
@@ -101,6 +98,24 @@ impl Commit {
             node_num: node_num,    // i
             signature: signature,  // sigma(i) -- Sig of sending node
         }
+    }
+}
+
+impl Request for Commit {
+    fn get_view_num(&self) -> ID {
+        self.view_num
+    }
+    fn get_seq_num(&self) -> ID {
+        self.seq_num
+    }
+    fn get_digest(&self) -> Digest {
+        self.digest.clone()
+    }
+}
+
+impl NodeRequest for Commit {
+    fn get_node_id(&self) -> ID {
+        self.node_num
     }
 }
 

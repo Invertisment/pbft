@@ -1,4 +1,4 @@
-use crate::dto::{PrePrepare,Prepare,Commit,ID,Tip,Shutdown,RequestIdentifier};
+use crate::dto::{PrePrepare,Prepare,Commit,ID,Tip,Shutdown};
 use std::sync::mpsc;
 use std::sync::mpsc::{Sender,Receiver};
 use std::option::Option;
@@ -34,26 +34,6 @@ impl State {
     }
 
     pub fn handle_protocol_message(&mut self, _message: &Message) {
-    }
-
-    pub fn get_view_and_seq(&mut self, message: &Message) -> Option<RequestIdentifier> {
-        let preprepare_arc = message.preprepare.get();
-        let preprepare_rwlock = preprepare_arc.read();
-        match preprepare_rwlock {
-            Ok(acquired) => {
-                match acquired.as_ref() {
-                    Some(pp) => {
-                        let pp: &PrePrepare = pp;
-                        Some(pp.get_id())
-                    },
-                    None => None,
-                }
-            },
-            Err(e) => {
-                println!("Error while trying to read message: {:?}", e);
-                None
-            }
-        }
     }
 }
 

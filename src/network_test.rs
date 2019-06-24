@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod network_basic_test {
 
-    use crate::dto::{ID,Commit,Num};
+    use crate::dto::{ID,Commit};
     use crate::node::{Message};
     use crate::network::{Network};
 
@@ -12,7 +12,7 @@ mod network_basic_test {
             Message::commit(
                 100,
                 i as ID,
-                Commit::new(1, 1, String::from(format!("digest {}", i)), i as Num, i as ID)));
+                Commit::new(1, 1, String::from(format!("digest {}", i)), i as ID, i as ID)));
         }
     }
 

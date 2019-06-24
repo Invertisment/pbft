@@ -6,8 +6,10 @@ mod util;
 mod dto;
 mod network;
 mod network_test;
+mod reqtable;
+mod reqtable_test;
 use network::Network;
-use crate::dto::{ID,Commit,Num};
+use crate::dto::{ID,Commit};
 use crate::node::{Message};
 use std::env;
 
@@ -31,7 +33,7 @@ fn queue_requests(net: &mut Network) {
             Message::commit(
                 100,
                 i as ID,
-                Commit::new(1, 1, String::from(format!("digest {}", i)), i as Num, i as ID)));
+                Commit::new(1 as ID, 1 as ID, String::from(format!("digest {}", i)), i as ID, i as ID)));
     }
 }
 
