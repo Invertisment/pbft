@@ -46,10 +46,10 @@ impl <M>RequestTable<M> where M: NodeRequest {
     pub fn append(&mut self, rwarc: Arc<RwLock<M>>) -> Result<(),String> {
         convert_err(rwarc.read()).map(|_m| {
             let m: &M = &*_m;
-            ensure_hm_val(&mut self.reqs, m.get_seq_num(), || HashMap::new());
-            let mut in_seq = self.reqs.get_mut(&m.get_seq_num()).unwrap();
-            ensure_hm_val(&mut in_seq, m.get_view_num(), || HashMap::new());
-            let mut in_view = in_seq.get_mut(&m.get_view_num()).unwrap();
+            ensure_hm_val(&mut self.reqs, m.get_seq_id(), || HashMap::new());
+            let mut in_seq = self.reqs.get_mut(&m.get_seq_id()).unwrap();
+            ensure_hm_val(&mut in_seq, m.get_view_id(), || HashMap::new());
+            let mut in_view = in_seq.get_mut(&m.get_view_id()).unwrap();
             ensure_hm_val(&mut in_view, m.get_digest(), || HashMap::new());
             let in_digest: &mut HashMap<NodeID, Arc<RwLock<M>>> = in_view.get_mut(&m.get_digest()).unwrap();
             in_digest.insert(m.get_node_id(), rwarc.clone());
@@ -57,8 +57,8 @@ impl <M>RequestTable<M> where M: NodeRequest {
     }
 
     fn get_approvers(&self, ri: &M) -> Option<&HashMap<ID, Arc<RwLock<M>>>> {
-        self.reqs.get(&ri.get_seq_num())
-            .map(|views| views.get(&ri.get_view_num()))
+        self.reqs.get(&ri.get_seq_id())
+            .map(|views| views.get(&ri.get_view_id()))
             .unwrap_or(Option::None)
             .map(|digests| digests.get(&ri.get_digest()))
             .unwrap_or(Option::None)

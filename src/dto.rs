@@ -15,8 +15,8 @@ i -- current node of the view
 
 #[derive(Debug)]
 pub struct PrePrepare {
-    view_num: ID,    // v
-    seq_num: ID,     // n
+    view_id: ID,    // v
+    seq_id: ID,     // n
     digest: Digest,  // d -- digest for m
     signature: Sig,  // sigma(p) -- sig of primary node
     message: TipMessage,    // m
@@ -24,25 +24,25 @@ pub struct PrePrepare {
 
 #[derive(Debug)]
 pub struct Prepare {
-    view_num: ID,    // v
-    seq_num: ID,     // n
+    view_id: ID,    // v
+    seq_id: ID,     // n
     digest: Digest,  // d -- digest for m
-    node_num: ID,    // i
+    node_id: ID,    // i
     signature: Sig,  // sigma(i) -- Sig of sending node
 }
 
 #[derive(Debug)]
 pub struct Commit {
-    view_num: ID,    // v
-    seq_num: ID,     // n
+    view_id: ID,    // v
+    seq_id: ID,     // n
     digest: Digest,  // d -- digest for m
-    node_num: ID,    // i
+    node_id: ID,    // i
     signature: Sig,  // sigma(i) -- Sig of sending node
 }
 
 pub trait Request {
-    fn get_view_num(&self) -> ID;   // v
-    fn get_seq_num(&self) -> ID;    // n
+    fn get_view_id(&self) -> ID;   // v
+    fn get_seq_id(&self) -> ID;    // n
     fn get_digest(&self) -> Digest; // n
 }
 
@@ -52,25 +52,25 @@ pub trait NodeRequest: Request {
 
 impl PrePrepare {
     pub fn new(
-        view_num: ID,    // v
-        seq_num: ID,     // n
+        view_id: ID,    // v
+        seq_id: ID,     // n
         digest: Digest,  // d -- digest for m
         signature: Sig,  // sigma(p) -- sig of primary node
         message: TipMessage,    // m
     ) -> PrePrepare {
         PrePrepare{
-            view_num: view_num,    // v
-            seq_num: seq_num,     // n
+            view_id: view_id,    // v
+            seq_id: seq_id,     // n
             digest: digest,  // d -- digest for m
             signature: signature,  // sigma(i) -- Sig of sending node
             message: message,    // m
         }
     }
     pub fn get_view(&self) -> ID {
-        self.view_num
+        self.view_id
     }
     pub fn get_seq(&self) -> ID {
-        self.seq_num
+        self.seq_id
     }
     pub fn get_digest(&self) -> &Digest {
         &self.digest
@@ -85,28 +85,28 @@ impl PrePrepare {
 
 impl Commit {
     pub fn new(
-        view_num: ID,    // v
-        seq_num: ID,     // n
+        view_id: ID,    // v
+        seq_id: ID,     // n
         digest: Digest,  // d -- digest for m
-        node_num: ID,    // i
+        node_id: ID,    // i
         signature: Sig,  // sigma(i) -- Sig of sending node
     ) -> Commit {
         Commit{
-            view_num: view_num,    // v
-            seq_num: seq_num,     // n
+            view_id: view_id,    // v
+            seq_id: seq_id,     // n
             digest: digest,  // d -- digest for m
-            node_num: node_num,    // i
+            node_id: node_id,    // i
             signature: signature,  // sigma(i) -- Sig of sending node
         }
     }
 }
 
 impl Request for Commit {
-    fn get_view_num(&self) -> ID {
-        self.view_num
+    fn get_view_id(&self) -> ID {
+        self.view_id
     }
-    fn get_seq_num(&self) -> ID {
-        self.seq_num
+    fn get_seq_id(&self) -> ID {
+        self.seq_id
     }
     fn get_digest(&self) -> Digest {
         self.digest.clone()
@@ -115,7 +115,7 @@ impl Request for Commit {
 
 impl NodeRequest for Commit {
     fn get_node_id(&self) -> ID {
-        self.node_num
+        self.node_id
     }
 }
 
