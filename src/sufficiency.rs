@@ -2,6 +2,8 @@ use crate::dto::{ID};
 use std::collections::{HashSet};
 use std::iter::Iterator;
 
+pub type SufficiencyChecker = fn(&HashSet<ID>, &Vec<ID>) -> bool;
+
 // |R| = 3f + 1
 // accepted = 2f + 1
 // f = (|R| - 1) / 3

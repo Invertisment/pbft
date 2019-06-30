@@ -3,20 +3,22 @@ use std::collections::{HashMap,HashSet};
 use std::option::Option;
 use crate::dto::{ID,Digest,NodeRequest};
 use crate::util::{ensure_hm_val,convert_err};
+use crate::sufficiency::SufficiencyChecker;
 
 pub type ViewID = ID;
 pub type SeqID = ID;
 pub type NodeID = ID;
 
-#[derive(Debug)]
 pub struct RequestTable<M: NodeRequest> {
     reqs: HashMap<SeqID, HashMap<ViewID, HashMap<Digest, HashMap<NodeID, Arc<RwLock<M>>>>>>,
+    check_sufficiency: SufficiencyChecker,
 }
 
 impl <M>RequestTable<M> where M: NodeRequest {
-    pub fn new() -> RequestTable<M> {
+    pub fn new(sufficiency_fn: SufficiencyChecker) -> RequestTable<M> {
         RequestTable{
-            reqs: HashMap::new()
+            reqs: HashMap::new(),
+            check_sufficiency: sufficiency_fn,
         }
     }
 
@@ -30,14 +32,9 @@ impl <M>RequestTable<M> where M: NodeRequest {
         })
     }
 
-    pub fn is_sufficient(&self, ri: Arc<RwLock<M>>,
-                         all_nodes: &HashSet<ID>,
-                         sufficiency_fn: &Fn(&HashSet<ID>, &Vec<ID>) -> bool
-    ) -> Result<bool, String> {
+    pub fn is_sufficient(&self, ri: Arc<RwLock<M>>, all_nodes: &HashSet<ID>) -> Result<bool, String> {
         self.find_approvers(ri, all_nodes)
-            .map(|approver_nodes| sufficiency_fn(all_nodes, &approver_nodes))
-        //self.find_approver_count(ri, nodes)
-        //    .map(|count| count > (((nodes.len()) * 2) / 3))
+            .map(|approver_nodes| (&self.check_sufficiency)(all_nodes, &approver_nodes))
     }
 
     pub fn append(&mut self, rwarc: Arc<RwLock<M>>) -> Result<(),String> {
@@ -66,6 +63,9 @@ impl <M>RequestTable<M> where M: NodeRequest {
     }
 }
 
+#[cfg(test)]
+use crate::sufficiency::{two_thirds};
+
 #[test]
 fn get_by_arc_hit() {
     use crate::dto::{Commit};
@@ -76,7 +76,7 @@ fn get_by_arc_hit() {
         400,
         400);
     let arc = Arc::new(RwLock::new(ppre));
-    let mut rt: RequestTable<Commit> = RequestTable::new();
+    let mut rt: RequestTable<Commit> = RequestTable::new(two_thirds);
     let append_res = rt.append(arc.clone());
     assert_eq!(append_res.is_ok(), true);
     let get_res = rt.get_by_arc(arc.clone());
@@ -96,7 +96,7 @@ fn get_by_arc_miss() {
         400,
         400);
     let arc = Arc::new(RwLock::new(ppre));
-    let rt: RequestTable<Commit> = RequestTable::new();
+    let rt: RequestTable<Commit> = RequestTable::new(two_thirds);
     let result = rt.get_by_arc(arc.clone());
     assert_eq!(result.is_ok(), true);
     assert_eq!(result.unwrap().is_none(), true);

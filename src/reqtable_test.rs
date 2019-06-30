@@ -8,9 +8,9 @@ mod reqtable_test {
 
     #[test]
     fn is_sufficient_empty() {
-        let pp: RequestTable<Commit> = RequestTable::new();
-        assert_eq!(pp.is_sufficient(new_req(10, 15, 1), &new_nodes(0), &two_thirds).is_ok(), true);
-        assert_eq!(pp.is_sufficient(new_req(10, 15, 1), &new_nodes(0), &two_thirds).unwrap(), false);
+        let pp: RequestTable<Commit> = RequestTable::new(two_thirds);
+        assert_eq!(pp.is_sufficient(new_req(10, 15, 1), &new_nodes(0)).is_ok(), true);
+        assert_eq!(pp.is_sufficient(new_req(10, 15, 1), &new_nodes(0)).unwrap(), false);
     }
 
     struct ConfirmationType {
@@ -46,16 +46,16 @@ mod reqtable_test {
         let node_count = 61;
         let nodes = new_nodes(node_count);
         for progress_below in 0..41 {
-            let mut confirm_progress = RequestTable::new();
+            let mut confirm_progress = RequestTable::new(two_thirds);
             add_confirmations(&mut confirm_progress, 0, 0, progress_below);
             println!("is_sufficient_threshold below {:?}/{:?}", progress_below, node_count);
-            assert_eq!(confirm_progress.is_sufficient(test_req.clone(), &nodes, &two_thirds).unwrap(), false);
+            assert_eq!(confirm_progress.is_sufficient(test_req.clone(), &nodes).unwrap(), false);
         }
         for progress_over in (41..(node_count + 1)).into_iter().rev() {
-            let mut confirm_progress = RequestTable::new();
+            let mut confirm_progress = RequestTable::new(two_thirds);
             add_confirmations(&mut confirm_progress, 0, 0, progress_over);
             println!("is_sufficient_threshold over {:?}/{:?}", progress_over, node_count);
-            assert_eq!(confirm_progress.is_sufficient(test_req.clone(), &nodes, &two_thirds).unwrap(), true);
+            assert_eq!(confirm_progress.is_sufficient(test_req.clone(), &nodes).unwrap(), true);
         }
     }
 
@@ -72,7 +72,7 @@ mod reqtable_test {
         let node_count = 61;
         let nodes = new_nodes(node_count);
         for progress_below in 10..41 {
-            let mut confirm_progress = RequestTable::new();
+            let mut confirm_progress = RequestTable::new(two_thirds);
             add_confirmations_complex(
                 &mut confirm_progress,
                 vec![
@@ -80,11 +80,11 @@ mod reqtable_test {
                     ConfirmationType{view: 0, seq: 1, count: progress_below - 10}
                 ]);
             println!("is_sufficient_threshold below {:?}/{:?}", progress_below, node_count);
-            assert_eq!(confirm_progress.is_sufficient(test_req0.clone(), &nodes, &two_thirds).unwrap(), false);
-            assert_eq!(confirm_progress.is_sufficient(test_req1.clone(), &nodes, &two_thirds).unwrap(), false);
+            assert_eq!(confirm_progress.is_sufficient(test_req0.clone(), &nodes).unwrap(), false);
+            assert_eq!(confirm_progress.is_sufficient(test_req1.clone(), &nodes).unwrap(), false);
         }
         for progress_over in (41..(node_count + 1)).into_iter().rev() {
-            let mut confirm_progress = RequestTable::new();
+            let mut confirm_progress = RequestTable::new(two_thirds);
             add_confirmations_complex(
                 &mut confirm_progress,
                 vec![
@@ -92,8 +92,8 @@ mod reqtable_test {
                     ConfirmationType{view: 0, seq: 1, count: progress_over - 40}
                 ]);
             println!("is_sufficient_threshold over {:?}/{:?}", progress_over, node_count);
-            assert_eq!(confirm_progress.is_sufficient(test_req0.clone(), &nodes, &two_thirds).unwrap(), true);
-            assert_eq!(confirm_progress.is_sufficient(test_req1.clone(), &nodes, &two_thirds).unwrap(), false);
+            assert_eq!(confirm_progress.is_sufficient(test_req0.clone(), &nodes).unwrap(), true);
+            assert_eq!(confirm_progress.is_sufficient(test_req1.clone(), &nodes).unwrap(), false);
         }
     }
 
