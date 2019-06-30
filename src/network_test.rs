@@ -90,8 +90,8 @@ mod network_interaction_test {
     use crate::dto::{ID,PrePrepare};
     use crate::node::{Message,NodeCtrl,State};
     use crate::network::{Network};
-    use std::sync::{Mutex,Arc,RwLock};
-    use std::collections::HashMap;
+    use std::sync::{Mutex,Arc};
+    use crate::reqtable::RequestTable;
 
     fn get_preprepare_size(maybe_node: Option<&NodeCtrl>) -> Result<usize, String> {
         if maybe_node.is_none() {
@@ -104,8 +104,8 @@ mod network_interaction_test {
             return Err("Node not found".to_owned());
         }
         let state: std::sync::MutexGuard<'_, State, > = state_lock.unwrap();
-        let preprepares: &HashMap<ID, Arc<RwLock<PrePrepare>>> = state.get_preprepares();
-        Ok(preprepares.len())
+        let preprepares: &RequestTable<PrePrepare> = state.get_preprepares();
+        Ok(preprepares.get_reqs().len())
     }
 
     #[test]

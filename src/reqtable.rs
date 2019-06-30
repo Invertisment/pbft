@@ -32,19 +32,26 @@ impl <M>RequestTable<M> where M: NodeRequest {
         }
     }
 
-    fn find_approvers<'a>(&self, ri: Arc<RwLock<M>>, nodes: &'a HashSet<ID>) -> Result<Vec<ID>, String> {
-        convert_err(ri.read()).map(|m| {
-            match self.get_approvers(&*m) {
-                Some(approvers) =>
-                    nodes.iter().filter(|node_id| approvers.get(&node_id).is_some()).map(|id| *id).collect(), // TODO: must return raw approvers; not from the node list
-                None => Vec::new(),
-            }
-        })
+    pub fn is_sufficient(&self, ri: Arc<RwLock<M>>, all_nodes: &HashSet<ID>) -> Result<bool, String> {
+        self.find_approvers(ri)
+            .map(|approver_nodes| (&self.check_sufficiency)(all_nodes, &approver_nodes))
     }
 
-    pub fn is_sufficient(&self, ri: Arc<RwLock<M>>, all_nodes: &HashSet<ID>) -> Result<bool, String> {
-        self.find_approvers(ri, all_nodes)
-            .map(|approver_nodes| (&self.check_sufficiency)(all_nodes, &approver_nodes))
+    // Unit test backdoor
+    #[cfg(test)]
+    pub fn get_reqs(&self) -> &HashMap<SeqID, HashMap<ViewID, HashMap<Digest, HashMap<NodeID, Arc<RwLock<M>>>>>> {
+        &self.reqs
+    }
+
+    fn find_approvers<'a>(&self, ri: Arc<RwLock<M>>) -> Result<HashSet<ID>, String> {
+        convert_err(ri.read()).map(|m| {
+            match self.get_approvers(&*m) {
+                Some(approvers) => {
+                    approvers.iter().map(|(k, _)| *k).collect()
+                }
+                None => HashSet::new(),
+            }
+        })
     }
 
     pub fn append(&mut self, rwarc: Arc<RwLock<M>>) -> Result<(),String> {

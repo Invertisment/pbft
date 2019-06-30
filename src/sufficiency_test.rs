@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod reqtable_test {
-    use crate::test_util::{new_nodes,new_nodes_vec};
+    use std::collections::HashSet;
+    use crate::dto::{ID};
+    use crate::test_util::new_nodes;
     use crate::sufficiency::{one,two_thirds};
     #[test]
     fn test_approval_of_two_thirds_61() {
@@ -15,11 +17,11 @@ mod reqtable_test {
         let nodes = new_nodes(node_count);
         for progress_below in 0..node_approver_count {
             println!("two_thirds_threshold {:?}/{:?} should be invalid", progress_below, node_count);
-            assert_eq!(two_thirds(&nodes, &new_nodes_vec(progress_below)), false);
+            assert_eq!(two_thirds(&nodes, &new_nodes(progress_below)), false);
         }
         for progress_above in node_approver_count..node_count {
             println!("two_thirds_threshold {:?}/{:?} should be valid", progress_above, node_count);
-            assert_eq!(two_thirds(&nodes, &new_nodes_vec(progress_above)), true);
+            assert_eq!(two_thirds(&nodes, &new_nodes(progress_above)), true);
         }
     }
 
@@ -32,39 +34,39 @@ mod reqtable_test {
         nodes.remove(&0);
         for progress_below in 0..node_approver_count+1 {
             println!("two_thirds_threshold {:?}/{:?} should be invalid", progress_below, node_count);
-            assert_eq!(two_thirds(&nodes, &new_nodes_vec(progress_below)), false);
+            assert_eq!(two_thirds(&nodes, &new_nodes(progress_below)), false);
         }
         for progress_above in node_approver_count+1..node_count+1 {
             println!("two_thirds_threshold {:?}/{:?} should be valid", progress_above, node_count);
-            assert_eq!(two_thirds(&nodes, &new_nodes_vec(progress_above)), true);
+            assert_eq!(two_thirds(&nodes, &new_nodes(progress_above)), true);
         }
     }
 
     #[test]
     fn approval_of_at_least_one_positive() {
         let nodes = new_nodes(20);
-        let approvers = vec![5];
+        let approvers: HashSet<ID> = vec![5].iter().map(|i| *i).collect();
         assert_eq!(one(&nodes, &approvers), true);
     }
 
     #[test]
     fn test_approval_of_at_least_one_negative() {
         let nodes = new_nodes(20);
-        let approvers = vec![100];
+        let approvers: HashSet<ID> = vec![100].iter().map(|i| *i).collect();
         assert_eq!(one(&nodes, &approvers), false);
     }
 
     #[test]
     fn test_approval_of_at_least_one_noise_no_approval() {
         let nodes = new_nodes(20);
-        let approvers = vec![101, 102, 103, 105];
+        let approvers: HashSet<ID> = vec![101, 102, 103, 105].iter().map(|i| *i).collect();
         assert_eq!(one(&nodes, &approvers), false);
     }
 
     #[test]
     fn test_approval_of_at_least_one_noise() {
         let nodes = new_nodes(20);
-        let approvers = vec![101, 102, 103, 105, 19];
+        let approvers: HashSet<ID> = vec![101, 102, 103, 105, 19].iter().map(|i| *i).collect();
         assert_eq!(one(&nodes, &approvers), true);
     }
 }

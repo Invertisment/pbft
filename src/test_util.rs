@@ -19,11 +19,3 @@ pub fn new_nodes(count: usize) -> HashSet<ID> {
     }
     return nodes;
 }
-
-pub fn new_nodes_vec<'a>(count: usize) -> Vec<ID> {
-    let mut nodes: Vec<ID> = Vec::new();
-    for i in 0..count as ID {
-        nodes.push(i);
-    }
-    return nodes;
-}

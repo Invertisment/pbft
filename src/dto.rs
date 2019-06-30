@@ -1,6 +1,6 @@
 use std::option::Option;
 
-pub type ID = u64;
+pub type ID = i64;
 pub type Sig = ID; // Signature. ID of the node that signed it. invalid ID -> nobody signed it.
 pub type Digest = String; // Hash of something
 pub type TipMessage = String; // current progress of Nodes
@@ -40,13 +40,10 @@ pub struct Commit {
     signature: Sig,  // sigma(i) -- Sig of sending node
 }
 
-pub trait Request {
+pub trait NodeRequest {
     fn get_view_id(&self) -> ID;   // v
     fn get_seq_id(&self) -> ID;    // n
     fn get_digest(&self) -> Digest; // n
-}
-
-pub trait NodeRequest: Request {
     fn get_node_id(&self) -> ID; // sigma(p) -- sig of primary node
 }
 
@@ -101,7 +98,7 @@ impl Commit {
     }
 }
 
-impl Request for Commit {
+impl NodeRequest for Commit {
     fn get_view_id(&self) -> ID {
         self.view_id
     }
@@ -111,15 +108,12 @@ impl Request for Commit {
     fn get_digest(&self) -> Digest {
         self.digest.clone()
     }
-}
-
-impl NodeRequest for Commit {
     fn get_node_id(&self) -> ID {
         self.node_id
     }
 }
 
-impl Request for PrePrepare {
+impl NodeRequest for PrePrepare {
     fn get_view_id(&self) -> ID {
         self.view_id
     }
@@ -128,10 +122,13 @@ impl Request for PrePrepare {
     }
     fn get_digest(&self) -> Digest {
         self.digest.clone()
+    }
+    fn get_node_id(&self) -> ID {
+        -1 // HACK: too much work to make two structures for PrePrepare and other requests
     }
 }
 
-impl Request for Prepare {
+impl NodeRequest for Prepare {
     fn get_view_id(&self) -> ID {
         self.view_id
     }
@@ -140,6 +137,9 @@ impl Request for Prepare {
     }
     fn get_digest(&self) -> Digest {
         self.digest.clone()
+    }
+    fn get_node_id(&self) -> ID {
+        self.node_id
     }
 }
 

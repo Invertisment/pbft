@@ -5,32 +5,42 @@ use std::option::Option;
 use std::thread;
 use std::thread::JoinHandle;
 use std::sync::{Arc,Mutex,RwLock};
-use std::collections::{HashMap,HashSet};
+use std::collections::HashSet;
 use std::result::{Result};
 use crate::util::retain_others;
+use crate::reqtable::RequestTable;
+use crate::sufficiency::{one,two_thirds};
 
 #[derive(Debug)]
 pub struct State {
     tip: Tip, // current consensus viewpoint of the node
     known_nodes: HashSet<ID>,
-    preprepares: HashMap<ID, Arc<RwLock<PrePrepare>>>,
-    prepares: HashMap<ID, Arc<RwLock<Prepare>>>,
-    commits: HashMap<ID, Arc<RwLock<Commit>>>,
+    preprepares: RequestTable<PrePrepare>,
+    prepares: RequestTable<Prepare>,
+    commits: RequestTable<Commit>,
 }
 
 impl State {
     pub fn genesis(known_nodes: HashSet<ID>) -> Arc<Mutex<State>> {
         Arc::new(Mutex::new(State{
             tip: Option::None,
-            preprepares: HashMap::new(),
-            prepares: HashMap::new(),
-            commits: HashMap::new(),
+            preprepares: RequestTable::new(one),
+            prepares: RequestTable::new(two_thirds),
+            commits: RequestTable::new(two_thirds),
             known_nodes: known_nodes,
         }))
     }
 
-    pub fn get_preprepares(&self) -> &HashMap<ID, Arc<RwLock<PrePrepare>>> {
+    pub fn get_preprepares(&self) -> &RequestTable<PrePrepare> {
         &self.preprepares
+    }
+
+    pub fn get_prepares(&self) -> &RequestTable<Prepare> {
+        &self.prepares
+    }
+
+    pub fn get_commits(&self) -> &RequestTable<Commit> {
+        &self.commits
     }
 
     pub fn handle_protocol_message(&mut self, _message: &Message) {
