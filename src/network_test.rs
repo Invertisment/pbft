@@ -92,6 +92,8 @@ mod network_interaction_test {
     use crate::network::{Network};
     use std::sync::{Mutex,Arc};
     use crate::reqtable::RequestTable;
+    use std::time::Duration;
+    use std::thread;
 
     fn get_preprepare_size(maybe_node: Option<&NodeCtrl>) -> Result<usize, String> {
         if maybe_node.is_none() {
@@ -108,6 +110,14 @@ mod network_interaction_test {
         Ok(preprepares.get_reqs().len())
     }
 
+    fn tick(net: &mut Network) {
+        match net.tick() {
+            Ok(res) => assert!(res),
+            Err(e) => panic!(e),
+        };
+        thread::sleep(Duration::from_millis(100));
+    }
+
     #[test]
     fn preprepare_should_reach_node() {
         let mut net = Network::new(2, 5);
@@ -121,10 +131,7 @@ mod network_interaction_test {
             Ok(size) => assert_eq!(size, 0),
             Err(msg) => panic!(msg),
         }
-        match net.tick() {
-            Ok(res) => assert!(res),
-            Err(e) => panic!(e),
-        };
+        tick(&mut net);
         match get_preprepare_size(net.get_node(&target)) {
             Ok(size) => assert_eq!(size, 1),
             Err(msg) => panic!(msg),
