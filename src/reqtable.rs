@@ -9,9 +9,19 @@ pub type ViewID = ID;
 pub type SeqID = ID;
 pub type NodeID = ID;
 
+// Debug: https://stackoverflow.com/a/52030021/2159808
 pub struct RequestTable<M: NodeRequest> {
     reqs: HashMap<SeqID, HashMap<ViewID, HashMap<Digest, HashMap<NodeID, Arc<RwLock<M>>>>>>,
     check_sufficiency: SufficiencyChecker,
+}
+
+impl <M> std::fmt::Debug for RequestTable<M>
+where M: NodeRequest + std::fmt::Debug {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        f.debug_struct("Range")
+            .field("reqs", &self.reqs)
+            .finish()
+    }
 }
 
 impl <M>RequestTable<M> where M: NodeRequest {
