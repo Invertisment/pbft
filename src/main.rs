@@ -1,13 +1,16 @@
 // An attribute to hide warnings for unused code.
 #![allow(dead_code)]
 
-mod node;
-mod util;
 mod dto;
 mod network;
 mod network_test;
+mod node;
 mod reqtable;
 mod reqtable_test;
+mod sufficiency;
+mod sufficiency_test;
+mod test_util;
+mod util;
 use network::Network;
 use crate::dto::{ID,Commit};
 use crate::node::{Message};

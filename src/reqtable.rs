@@ -20,27 +20,24 @@ impl <M>RequestTable<M> where M: NodeRequest {
         }
     }
 
-    fn find_approvers<'a>(&self, ri: Arc<RwLock<M>>, nodes: &'a HashSet<ID>) -> Result<Vec<&'a ID>, String> {
+    fn find_approvers<'a>(&self, ri: Arc<RwLock<M>>, nodes: &'a HashSet<ID>) -> Result<Vec<ID>, String> {
         convert_err(ri.read()).map(|m| {
             match self.get_approvers(&*m) {
                 Some(approvers) =>
-                    nodes.iter().filter(|node_id| approvers.get(&node_id).is_some()).collect(),
+                    nodes.iter().filter(|node_id| approvers.get(&node_id).is_some()).map(|id| *id).collect(), // TODO: must return raw approvers; not from the node list
                 None => Vec::new(),
             }
         })
     }
 
-    fn find_approver_count(&self, ri: Arc<RwLock<M>>, nodes: &HashSet<ID>) -> Result<usize, String> {
-        self.find_approvers(ri, nodes)
-            .map(|approvers| {
-                let approvers: Vec<&ID> = approvers;
-                approvers.iter().filter(|a| nodes.get(a).is_some()).count()
-            })
-    }
-
-    pub fn is_sufficient(&self, ri: Arc<RwLock<M>>, nodes: &HashSet<ID>) -> Result<bool, String> {
-        self.find_approver_count(ri, nodes)
-            .map(|count| count > (((nodes.len()) * 2) / 3))
+    pub fn is_sufficient(&self, ri: Arc<RwLock<M>>,
+                         all_nodes: &HashSet<ID>,
+                         sufficiency_fn: &Fn(&HashSet<ID>, &Vec<ID>) -> bool
+    ) -> Result<bool, String> {
+        self.find_approvers(ri, all_nodes)
+            .map(|approver_nodes| sufficiency_fn(all_nodes, &approver_nodes))
+        //self.find_approver_count(ri, nodes)
+        //    .map(|count| count > (((nodes.len()) * 2) / 3))
     }
 
     pub fn append(&mut self, rwarc: Arc<RwLock<M>>) -> Result<(),String> {
@@ -103,22 +100,4 @@ fn get_by_arc_miss() {
     let result = rt.get_by_arc(arc.clone());
     assert_eq!(result.is_ok(), true);
     assert_eq!(result.unwrap().is_none(), true);
-}
-
-#[test]
-fn find_approver_count() {
-    use crate::dto::{Commit};
-    let ppre = Commit::new(
-        2,
-        2,
-        "Digest".to_owned(),
-        2,
-        2);
-    let arc = Arc::new(RwLock::new(ppre));
-    let mut rt: RequestTable<Commit> = RequestTable::new();
-    let res = rt.append(arc.clone());
-    assert_eq!(res.is_ok(), true);
-    let approver_count_res = rt.find_approver_count(arc, &(0..5 as ID).into_iter().collect());
-    assert_eq!(approver_count_res.is_ok(), true);
-    assert_eq!(approver_count_res.unwrap(), 1);
 }

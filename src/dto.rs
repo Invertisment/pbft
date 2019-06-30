@@ -119,5 +119,29 @@ impl NodeRequest for Commit {
     }
 }
 
+impl Request for PrePrepare {
+    fn get_view_id(&self) -> ID {
+        self.view_id
+    }
+    fn get_seq_id(&self) -> ID {
+        self.seq_id
+    }
+    fn get_digest(&self) -> Digest {
+        self.digest.clone()
+    }
+}
+
+impl Request for Prepare {
+    fn get_view_id(&self) -> ID {
+        self.view_id
+    }
+    fn get_seq_id(&self) -> ID {
+        self.seq_id
+    }
+    fn get_digest(&self) -> Digest {
+        self.digest.clone()
+    }
+}
+
 #[derive(Debug)]
 pub struct Shutdown {}
