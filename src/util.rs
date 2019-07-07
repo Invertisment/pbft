@@ -1,23 +1,6 @@
 use crate::dto::{ID};
-use std::collections::{HashSet,HashMap};
+use std::collections::HashMap;
 use std::ops::FnOnce;
-
-pub fn retain_others(to_remove: ID, set: &HashSet<ID>) -> HashSet<ID> {
-    let mut cloned: HashSet<ID> = set.clone();
-    cloned.remove(&to_remove);
-    cloned
-}
-
-#[test]
-fn should_copy_and_remove_own_id() {
-    fn make_ids(size: usize) -> HashSet<ID> {
-        (0..size as ID).into_iter().collect()
-    }
-    let set: &HashSet<ID> = &make_ids(10);
-    let retained = retain_others(4 as ID, set);
-    assert_eq!(retained.len(), 9);
-    assert!(!retained.contains(&4));
-}
 
 pub fn ensure_hm_val<K, V, F>(top_level: &mut HashMap<K, V>, key_top: K, new_vt: F)
 where K: std::cmp::Eq + std::hash::Hash,
@@ -31,4 +14,17 @@ where K: std::cmp::Eq + std::hash::Hash,
 pub fn convert_err<Any, D>(res: Result<Any, D>) -> Result<Any, String>
 where D: std::fmt::Debug {
     res.map_err(|e| format!("[err] {:?}", e))
+}
+
+pub fn find_others<'a>(me: ID, all_nodes: impl Iterator<Item = &'a ID> + 'a) -> impl Iterator<Item = ID> + 'a {
+    all_nodes.filter(move |other| **other != me).map(|i| *i)
+}
+
+#[test]
+fn should_find_others() {
+    let set: Vec<ID> = [1, 5, 56, 12, 214, 11].iter().map(|i| *i).collect();
+    let others_5: Vec<ID> = find_others(5, set.iter()).collect();
+    assert_eq!(others_5, vec![1, 56, 12, 214, 11]);
+    let others_214: Vec<ID> = find_others(214, set.iter()).collect();
+    assert_eq!(others_214, vec![1, 5, 56, 12, 11])
 }

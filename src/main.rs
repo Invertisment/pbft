@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 mod dto;
+mod dto_test;
 mod network;
 mod network_test;
 mod node;

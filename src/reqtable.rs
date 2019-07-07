@@ -9,8 +9,9 @@ pub type ViewID = ID;
 pub type SeqID = ID;
 pub type NodeID = ID;
 
-// Debug: https://stackoverflow.com/a/52030021/2159808
+// Debug can't print functions: https://stackoverflow.com/a/52030021/2159808
 pub struct RequestTable<M: NodeRequest> {
+    // Arc need: Ms are shared between nodes
     reqs: HashMap<SeqID, HashMap<ViewID, HashMap<Digest, HashMap<NodeID, Arc<RwLock<M>>>>>>,
     check_sufficiency: SufficiencyChecker,
 }
@@ -32,9 +33,8 @@ impl <M>RequestTable<M> where M: NodeRequest {
         }
     }
 
-    pub fn is_sufficient(&self, ri: Arc<RwLock<M>>, all_nodes: &HashSet<ID>) -> Result<bool, String> {
-        self.find_approvers(ri)
-            .map(|approver_nodes| (&self.check_sufficiency)(all_nodes, &approver_nodes))
+    pub fn is_sufficient(&self, ri: &M, all_nodes: &HashSet<ID>) -> bool {
+        (&self.check_sufficiency)(all_nodes, &self.find_approvers(ri))
     }
 
     // Unit test backdoor
@@ -43,18 +43,16 @@ impl <M>RequestTable<M> where M: NodeRequest {
         &self.reqs
     }
 
-    fn find_approvers<'a>(&self, ri: Arc<RwLock<M>>) -> Result<HashSet<ID>, String> {
-        convert_err(ri.read()).map(|m| {
-            match self.get_approvers(&*m) {
-                Some(approvers) => {
-                    approvers.iter().map(|(k, _)| *k).collect()
-                }
-                None => HashSet::new(),
+    fn find_approvers(&self, message: &M) -> HashSet<ID> {
+        match self.get_approvers(message) {
+            Some(approvers) => {
+                approvers.iter().map(|(k, _)| *k).collect()
             }
-        })
+            None => HashSet::new(),
+        }
     }
 
-    pub fn append(&mut self, rwarc: Arc<RwLock<M>>) -> Result<(),String> {
+    pub fn append<'a>(&mut self, rwarc: Arc<RwLock<M>>) -> Result<(),String> {
         convert_err(rwarc.read()).map(|_m| {
             let m: &M = &*_m;
             ensure_hm_val(&mut self.reqs, m.get_seq_id(), || HashMap::new());
@@ -63,7 +61,7 @@ impl <M>RequestTable<M> where M: NodeRequest {
             let mut in_view = in_seq.get_mut(&m.get_view_id()).unwrap();
             ensure_hm_val(&mut in_view, m.get_digest(), || HashMap::new());
             let in_digest: &mut HashMap<NodeID, Arc<RwLock<M>>> = in_view.get_mut(&m.get_digest()).unwrap();
-            in_digest.insert(m.get_node_id(), rwarc.clone());
+            in_digest.insert(m.get_sender_id(), rwarc.clone());
         })
     }
 

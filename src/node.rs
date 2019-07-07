@@ -7,27 +7,36 @@ use std::thread::JoinHandle;
 use std::sync::{Arc,Mutex,RwLock};
 use std::collections::HashSet;
 use std::result::{Result};
-use crate::util::retain_others;
+use crate::util::find_others;
 use crate::reqtable::RequestTable;
 use crate::sufficiency::{one,two_thirds};
+use crate::util::convert_err;
 
 #[derive(Debug)]
 pub struct State {
     tip: Tip, // current consensus viewpoint of the node
+    seq_id: ID,
     known_nodes: HashSet<ID>,
     preprepares: RequestTable<PrePrepare>,
     prepares: RequestTable<Prepare>,
     commits: RequestTable<Commit>,
+    sent_preprepare: Option<Arc<RwLock<PrePrepare>>>,
+    sent_prepare: Option<Arc<RwLock<Prepare>>>,
+    sent_commit: Option<Arc<RwLock<Commit>>>,
 }
 
 impl State {
     pub fn genesis(known_nodes: HashSet<ID>) -> Arc<Mutex<State>> {
         Arc::new(Mutex::new(State{
             tip: Option::None,
+            seq_id: 0,
             preprepares: RequestTable::new(one),
             prepares: RequestTable::new(two_thirds),
             commits: RequestTable::new(two_thirds),
             known_nodes: known_nodes,
+            sent_preprepare: None,
+            sent_prepare: None,
+            sent_commit: None
         }))
     }
 
@@ -43,29 +52,66 @@ impl State {
         &self.commits
     }
 
-    fn handle_message<M>(reqtable: &mut RequestTable<M>, maybe_msg: &Option<Arc<RwLock<M>>>) -> Result<(), String>
-    where M: NodeRequest {
-        match maybe_msg {
-            Some(msg) => {
-                reqtable.append(msg.clone())
-            },
-            None => Ok(())
-        }
+    fn is_valid_next_seq(&self, req: &NodeRequest) -> bool {
+        req.get_seq_id() > self.seq_id
     }
 
-    pub fn handle_protocol_message(&mut self, message: &Message) -> Result<(), String> {
+    fn handle_preprepare(&mut self, me: ID, message: Arc<RwLock<PrePrepare>>, _data_sender: Sender<Message>) -> Result<(), String> {
+        // Did we sent any preprepares for this round? We should send only one next preprepare
+        if self.sent_preprepare.is_some() {
+            return Ok(())
+        }
+        let result = self.preprepares.append(message.clone());
+        if result.is_err() {
+            return result;
+        }
+        convert_err(message.read()).map(|message_lock| {
+            // Was the inserted message valid?
+            println!("[{:?}] Preprepare sufficiency {:?}", me, self.preprepares.is_sufficient(&message_lock, &self.known_nodes));
+            if !self.preprepares.is_sufficient(&message_lock, &self.known_nodes) {
+                return
+            }
+            // seq_id must point to the future one
+            if !self.is_valid_next_seq(&*message_lock) {
+                println!("[{:?}] Preprepare dropped", me);
+                return;
+            }
+            // sufficient and fresh preprepare
+            println!("[{:?}] Preprepare is sufficient! Sending to {:?}", me, self.known_nodes);
+        })
+    }
+
+    fn handle_prepare(&mut self, _me: ID, message: Arc<RwLock<Prepare>>, _data_sender: Sender<Message>) -> Result<(), String> {
+        let result = self.prepares.append(message.clone());
+        result.map(|_a| ())
+        //self.prepares.is_sufficient(message, &self.known_nodes)
+        //    .map(|is_sufficient| {
+        //        println!("[{:?}] Prepare is sufficient! Sending to {:?}", me, self.known_nodes);
+        //    })
+    }
+
+    fn handle_commit(&mut self, _me: ID, message: Arc<RwLock<Commit>>, _data_sender: Sender<Message>) -> Result<(), String> {
+        let result = self.commits.append(message.clone());
+        result.map(|_a| ())
+        //self.commits.is_sufficient(message, &self.known_nodes)
+        //    .map(|is_sufficient| {
+        //        println!("[{:?}] Commit is sufficient! Sending to {:?}", me, self.known_nodes);
+        //    })
+    }
+
+    pub fn handle_protocol_message(&mut self, me: ID, message: Message, data_sender: Sender<Message>) -> Result<(), String> {
         print!("new message! {:?}", &message);
-        // TODO: Not sure how to make a for loop here
+        // TODO: Not sure how to make a for loop here; don't want to create new structs
         if message.preprepare.is_some() {
-            return State::handle_message(&mut self.preprepares, &message.preprepare);
+            return self.handle_preprepare(me, message.preprepare.unwrap(), data_sender)
         }
         if message.prepare.is_some() {
-            return State::handle_message(&mut self.prepares, &message.prepare);
+            return self.handle_prepare(me, message.prepare.unwrap(), data_sender)
         }
         if message.commit.is_some() {
-            return State::handle_message(&mut self.commits, &message.commit);
+            return self.handle_commit(me, message.commit.unwrap(), data_sender)
         }
-        Ok(())
+        Err("Unknown message".to_owned())
     }
 }
 
@@ -139,15 +185,16 @@ pub struct Node {
 impl Node {
     pub fn spawn(id: ID, known_nodes: &HashSet<ID>) -> NodeCtrl {
         let (data_sender, data_receiver) = mpsc::channel();
-        let state = State::genesis(retain_others(id, known_nodes));
+        let state = State::genesis(find_others(id, known_nodes.iter()).collect());
         let state_clone = state.clone();
+        let data_sender_clone = data_sender.clone();
         let join_handle = thread::spawn(
             move || {
                 let node = Node {
                     id: id,
                     state: state.clone(),
                 };
-                node.handle_all_requests(data_receiver)
+                node.handle_all_requests(data_receiver, data_sender_clone)
                 });
         NodeCtrl {
             join_handle: join_handle,
@@ -156,7 +203,7 @@ impl Node {
         }
     }
 
-    fn handle_all_requests(&self, data_receiver: Receiver<Message>) -> Result<(), String> {
+    fn handle_all_requests(&self, data_receiver: Receiver<Message>, data_sender: Sender<Message>) -> Result<(), String> {
         for msg in data_receiver {
             //println!("[{}] Received {:?}", node.id, msg);
             let should_shutdown = self.handle_control_message(&msg);
@@ -164,7 +211,7 @@ impl Node {
                 print!("[{}] Shutdown", self.id);
                 break;
             }
-            self.handle_protocol_message(&msg);
+            self.handle_protocol_message(msg, data_sender.clone());
         }
         Ok(())
     }
@@ -177,13 +224,16 @@ impl Node {
         false
     }
 
-    fn handle_protocol_message(&self, message: &Message) {
+    fn handle_protocol_message(&self, message: Message, data_sender: Sender<Message>) {
         match self.state.lock() {
             Ok(mut guard) => {
-                (*guard).handle_protocol_message(message);
+                match (*guard).handle_protocol_message(self.id, message, data_sender) {
+                    Ok(_ok) => (),
+                    Err(e) => println!("[{}] Error in message loop: {:?}", self.id, e),
+                }
             },
             Err(e) => {
-                println!("[{}] Error while trying to acquire state: {:?}", self.id, e);
+                println!("[{}] Error while trying to acquire node's own state: {:?}", self.id, e);
             },
         }
     }

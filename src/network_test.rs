@@ -121,12 +121,12 @@ mod network_interaction_test {
     #[test]
     fn preprepare_should_reach_node() {
         let mut net = Network::new(2, 5);
-        let sender = 1337 as ID;
+        let sender = 0 as ID;
         let target = 1 as ID;
         net.queue_add(Message::preprepare(
             sender,
             target,
-            PrePrepare::new(0, 0, "digest".to_owned(), sender, "message".to_owned())));
+            PrePrepare::new(0, 1, "digest".to_owned(), sender, "message".to_owned(), sender)));
         match get_preprepare_size(net.get_node(&target)) {
             Ok(size) => assert_eq!(size, 0),
             Err(msg) => panic!(msg),

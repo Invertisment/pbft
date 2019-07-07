@@ -1,6 +1,6 @@
 use std::option::Option;
 
-pub type ID = i64;
+pub type ID = u64;
 pub type Sig = ID; // Signature. ID of the node that signed it. invalid ID -> nobody signed it.
 pub type Digest = String; // Hash of something
 pub type TipMessage = String; // current progress of Nodes
@@ -20,6 +20,7 @@ pub struct PrePrepare {
     digest: Digest,  // d -- digest for m
     signature: Sig,  // sigma(p) -- sig of primary node
     message: TipMessage,    // m
+    sender_id: ID,    // i // Not present in the original protocol
 }
 
 #[derive(Debug)]
@@ -27,7 +28,7 @@ pub struct Prepare {
     view_id: ID,    // v
     seq_id: ID,     // n
     digest: Digest,  // d -- digest for m
-    node_id: ID,    // i
+    sender_id: ID,    // i
     signature: Sig,  // sigma(i) -- Sig of sending node
 }
 
@@ -36,7 +37,7 @@ pub struct Commit {
     view_id: ID,    // v
     seq_id: ID,     // n
     digest: Digest,  // d -- digest for m
-    node_id: ID,    // i
+    sender_id: ID,    // i
     signature: Sig,  // sigma(i) -- Sig of sending node
 }
 
@@ -44,7 +45,7 @@ pub trait NodeRequest {
     fn get_view_id(&self) -> ID;   // v
     fn get_seq_id(&self) -> ID;    // n
     fn get_digest(&self) -> Digest; // n
-    fn get_node_id(&self) -> ID; // sigma(p) -- sig of primary node
+    fn get_sender_id(&self) -> ID; // sigma(p) -- sig of primary node
 }
 
 impl PrePrepare {
@@ -54,6 +55,7 @@ impl PrePrepare {
         digest: Digest,  // d -- digest for m
         signature: Sig,  // sigma(p) -- sig of primary node
         message: TipMessage,    // m
+        sender_id: ID,
     ) -> PrePrepare {
         PrePrepare{
             view_id: view_id,    // v
@@ -61,23 +63,39 @@ impl PrePrepare {
             digest: digest,  // d -- digest for m
             signature: signature,  // sigma(i) -- Sig of sending node
             message: message,    // m
+            sender_id: sender_id,
         }
     }
-    pub fn get_view(&self) -> ID {
-        self.view_id
+    pub fn make_prepare(&self, sender_id: ID, sender_digest: String) -> Prepare {
+        Prepare::new(
+            self.view_id,
+            self.seq_id,
+            sender_digest,
+            sender_id,
+            sender_id
+        )
     }
-    pub fn get_seq(&self) -> ID {
-        self.seq_id
+}
+
+impl Prepare {
+    pub fn new(
+        view_id: ID,    // v
+        seq_id: ID,     // n
+        digest: Digest,  // d -- digest for m
+        sender_id: ID,    // i
+        signature: Sig,  // sigma(i) -- Sig of sending node
+    ) -> Prepare {
+        Prepare{
+            view_id: view_id,    // v
+            seq_id: seq_id,     // n
+            digest: digest,  // d -- digest for m
+            sender_id: sender_id,
+            signature: signature,  // sigma(i) -- Sig of sending node
+        }
     }
-    pub fn get_digest(&self) -> &Digest {
-        &self.digest
-    }
-    pub fn get_signature(&self) -> Sig {
-        self.signature
-    }
-    pub fn get_message(&self) -> &TipMessage {
-        &self.message
-    }
+    //pub fn make_commit(&self, sender_id: ID) -> Commit {
+    //    Commit::new(1,1,"".to_owned(),1,1)
+    //}
 }
 
 impl Commit {
@@ -85,14 +103,14 @@ impl Commit {
         view_id: ID,    // v
         seq_id: ID,     // n
         digest: Digest,  // d -- digest for m
-        node_id: ID,    // i
+        sender_id: ID,    // i
         signature: Sig,  // sigma(i) -- Sig of sending node
     ) -> Commit {
         Commit{
             view_id: view_id,    // v
             seq_id: seq_id,     // n
             digest: digest,  // d -- digest for m
-            node_id: node_id,    // i
+            sender_id: sender_id,    // i
             signature: signature,  // sigma(i) -- Sig of sending node
         }
     }
@@ -108,8 +126,8 @@ impl NodeRequest for Commit {
     fn get_digest(&self) -> Digest {
         self.digest.clone()
     }
-    fn get_node_id(&self) -> ID {
-        self.node_id
+    fn get_sender_id(&self) -> ID {
+        self.sender_id
     }
 }
 
@@ -123,8 +141,8 @@ impl NodeRequest for PrePrepare {
     fn get_digest(&self) -> Digest {
         self.digest.clone()
     }
-    fn get_node_id(&self) -> ID {
-        -1 // HACK: too much work to make two structures for PrePrepare and other requests
+    fn get_sender_id(&self) -> ID {
+        self.sender_id
     }
 }
 
@@ -138,8 +156,8 @@ impl NodeRequest for Prepare {
     fn get_digest(&self) -> Digest {
         self.digest.clone()
     }
-    fn get_node_id(&self) -> ID {
-        self.node_id
+    fn get_sender_id(&self) -> ID {
+        self.sender_id
     }
 }
 

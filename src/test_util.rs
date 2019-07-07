@@ -1,15 +1,13 @@
 use crate::dto::{Commit,ID};
 use std::collections::HashSet;
-use std::sync::{Arc,RwLock};
 
-pub fn new_req(view: ID, seq: ID, sender: ID) -> Arc<RwLock<Commit>> {
-    let pre = Commit::new(
+pub fn new_req(view: ID, seq: ID, sender: ID) -> Commit {
+    Commit::new(
         view as ID,
         seq as ID,
         format!("Digest {} {}", view, seq).to_owned(),
         sender as ID,
-        sender as ID);
-    Arc::new(RwLock::new(pre))
+        sender as ID)
 }
 
 pub fn new_nodes(count: usize) -> HashSet<ID> {
