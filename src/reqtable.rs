@@ -33,7 +33,8 @@ impl <M>RequestTable<M> where M: NodeRequest {
         }
     }
 
-    pub fn is_sufficient(&self, ri: &M, all_nodes: &HashSet<ID>) -> bool {
+    pub fn is_sufficient<N>(&self, ri: &N, all_nodes: &HashSet<ID>) -> bool
+    where N: NodeRequest {
         (&self.check_sufficiency)(all_nodes, &self.find_approvers(ri))
     }
 
@@ -43,7 +44,8 @@ impl <M>RequestTable<M> where M: NodeRequest {
         &self.reqs
     }
 
-    fn find_approvers(&self, message: &M) -> HashSet<ID> {
+    fn find_approvers<N>(&self, message: &N) -> HashSet<ID>
+    where N: NodeRequest {
         match self.get_approvers(message) {
             Some(approvers) => {
                 approvers.iter().map(|(k, _)| *k).collect()
@@ -65,7 +67,8 @@ impl <M>RequestTable<M> where M: NodeRequest {
         })
     }
 
-    fn get_approvers(&self, ri: &M) -> Option<&HashMap<ID, Arc<RwLock<M>>>> {
+    fn get_approvers<N>(&self, ri: &N) -> Option<&HashMap<ID, Arc<RwLock<M>>>>
+    where N: NodeRequest {
         self.reqs.get(&ri.get_seq_id())
             .map(|views| views.get(&ri.get_view_id()))
             .unwrap_or(Option::None)
@@ -73,9 +76,21 @@ impl <M>RequestTable<M> where M: NodeRequest {
             .unwrap_or(Option::None)
     }
 
-    fn get_by_arc(&self, rw: Arc<RwLock<M>>) -> Result<Option<&HashMap<ID, Arc<RwLock<M>>>>, String> {
+    fn get_by_arc<N>(&self, rw: Arc<RwLock<N>>) -> Result<Option<&HashMap<ID, Arc<RwLock<M>>>>, String>
+    where N: NodeRequest {
         convert_err(rw.read()).map(|m| self.get_approvers(&*m))
     }
+
+    pub fn find<N>(&self, message: &N) -> Option<&Arc<RwLock<M>>>
+    where N: NodeRequest {
+        let maybe_approvers = self.get_approvers(message);
+        if maybe_approvers.is_none() {
+            return Option::None;
+        }
+        let approvers = maybe_approvers.unwrap();
+        approvers.values().next()
+    }
+
 }
 
 #[cfg(test)]

@@ -28,7 +28,7 @@ pub struct State {
 impl State {
     pub fn genesis(known_nodes: HashSet<ID>) -> Arc<Mutex<State>> {
         Arc::new(Mutex::new(State{
-            tip: Option::None,
+            tip: "genesis".to_owned(),
             seq_id: 0,
             preprepares: RequestTable::new(one),
             prepares: RequestTable::new(two_thirds),
@@ -67,26 +67,39 @@ impl State {
         req.get_seq_id() > self.seq_id
     }
 
-    fn handle_preprepare(&mut self, me: ID, message: Arc<RwLock<PrePrepare>>, data_sender: Sender<Message>) -> Result<(), String> {
+    fn append<M>(reqs: &mut RequestTable<M>, sent_request: &Option<Arc<RwLock<M>>>, message: &Arc<RwLock<M>>) -> Result<(), String>  where M: NodeRequest {
         // Did we sent any preprepares for this round? We should send only one next preprepare
-        if self.sent_preprepare.is_some() {
+        if sent_request.is_some() {
             return Ok(())
         }
-        let result = self.preprepares.append(message.clone());
+        reqs.append(message.clone())
+    }
+
+    fn validate_message<M>(&self,me: ID, reqs: &RequestTable<M>,  message: &M) -> bool
+    where M: NodeRequest + std::fmt::Debug  {
+        println!("[{:?}: {} -> {}; [{:?}]] Msg: {:?}", me, me, message.get_sender_id(), self.known_nodes, message);
+        // Was the inserted message valid?
+        //println!("[{:?}] Preprepare sufficiency {:?}", me, self.preprepares.is_sufficient(&message_lock, &self.known_nodes));
+        if !reqs.is_sufficient(message, &self.known_nodes) {
+            println!("[{:?}] Drop: message doesn't have enough approvers", me);
+            return false
+        }
+        // seq_id must point to the future one
+        if !self.is_valid_next_seq(message) {
+            println!("[{:?}] Drop: next seq is invalid", me);
+            return false;
+        }
+        true
+    }
+
+    fn handle_preprepare(&mut self, me: ID, message: Arc<RwLock<PrePrepare>>, data_sender: Sender<Message>) -> Result<(), String> {
+        let result = State::append(&mut self.preprepares, &self.sent_preprepare, &message);
         if result.is_err() {
             return result;
         }
         convert_err(message.read()).map(|_message_lock| {
             let message_lock: RwLockReadGuard<PrePrepare> = _message_lock;
-            // Was the inserted message valid?
-            //println!("[{:?}] Preprepare sufficiency {:?}", me, self.preprepares.is_sufficient(&message_lock, &self.known_nodes));
-            if !self.preprepares.is_sufficient(&message_lock, &self.known_nodes) {
-                println!("[{:?}] Preprepare drop: message from invalid node", me);
-                return
-            }
-            // seq_id must point to the future one
-            if !self.is_valid_next_seq(&*message_lock) {
-                println!("[{:?}] Preprepare drop: next seq is invalid", me);
+            if !self.validate_message(me, &self.preprepares, &*message_lock) {
                 return;
             }
             // if we've sent anything we shouldn't send anything twice
@@ -107,22 +120,71 @@ impl State {
         })
     }
 
-    fn handle_prepare(&mut self, _me: ID, message: Arc<RwLock<Prepare>>, _data_sender: Sender<Message>) -> Result<(), String> {
-        let result = self.prepares.append(message.clone());
-        result.map(|_a| ())
-        //self.prepares.is_sufficient(message, &self.known_nodes)
-        //    .map(|is_sufficient| {
-        //        println!("[{:?}] Prepare is sufficient! Sending to {:?}", me, self.known_nodes);
-        //    })
+    fn handle_prepare(&mut self, me: ID, message: Arc<RwLock<Prepare>>, data_sender: Sender<Message>) -> Result<(), String> {
+        let result = State::append(&mut self.prepares, &self.sent_prepare, &message);
+        if result.is_err() {
+            return result;
+        }
+        convert_err(message.read()).map(|_message_lock| {
+            let message_lock: RwLockReadGuard<Prepare> = _message_lock;
+            if !self.validate_message(me, &self.prepares, &*message_lock) {
+                return;
+            }
+            // if we've sent anything we shouldn't send anything twice
+            if self.sent_commit.is_some() {
+                println!("[{:?}] Prepare drop: next seq is invalid", me);
+                return;
+            }
+            // new prepare
+            let commit = Arc::new(RwLock::new(message_lock.make_commit(me, digest(me))));
+            // handle our new prepare internally
+            let res = self.handle_commit(me, commit.clone(), data_sender.clone());
+            if res.is_err() {
+                println!("[{:?}] Prepare insertion err {:?}", me, res.err());
+                return;
+            }
+            //println!("[{:?}] Prepare is sufficient! Sending to {:?}", me, self.known_nodes);
+            self.send(me, data_sender, Message::commit, commit);
+        })
     }
 
-    fn handle_commit(&mut self, _me: ID, message: Arc<RwLock<Commit>>, _data_sender: Sender<Message>) -> Result<(), String> {
-        let result = self.commits.append(message.clone());
-        result.map(|_a| ())
-        //self.commits.is_sufficient(message, &self.known_nodes)
-        //    .map(|is_sufficient| {
-        //        println!("[{:?}] Commit is sufficient! Sending to {:?}", me, self.known_nodes);
-        //    })
+    fn update_tip(&mut self, me: ID, commit: &Commit) {
+        // check that all preprepares and prepares exist
+        if !self.preprepares.is_sufficient(commit, &self.known_nodes)
+            && !self.prepares.is_sufficient(commit, &self.known_nodes) {
+                println!("[{:?}] Commit ignore: previous requests are not sufficient", me);
+                return
+            }
+        let found_p = self.preprepares.find(commit);
+        let new_state: Option<String> = found_p
+            .map(|preprepare_lock|
+                 preprepare_lock
+                 .read()
+                 .map(|preprepare| preprepare.get_message())
+                 .ok())
+            .unwrap();
+        // save the new state
+        self.tip = new_state.unwrap_or(self.tip.clone());
+    }
+
+    fn handle_commit(&mut self, me: ID, message: Arc<RwLock<Commit>>, _data_sender: Sender<Message>) -> Result<(), String> {
+        let result = State::append(&mut self.commits, &self.sent_commit, &message);
+        if result.is_err() {
+            return result;
+        }
+        convert_err(message.read()).map(|_message_lock| {
+            let message_lock: RwLockReadGuard<Commit> = _message_lock;
+            if !self.validate_message(me, &self.commits, &*message_lock) {
+                return;
+            }
+            // if we've sent anything we shouldn't send anything twice
+            if self.sent_commit.is_some() {
+                println!("[{:?}] Prepare drop: next seq is invalid", me);
+                return;
+            }
+            println!("[{:?}] Client response: {:?}", me, message_lock);
+            self.update_tip(me, &*message_lock)
+        })
     }
 
     pub fn handle_protocol_message(&mut self, me: ID, message: Message, data_sender: Sender<Message>) -> Result<(), String> {

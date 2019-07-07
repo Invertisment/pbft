@@ -18,12 +18,12 @@ mod network_basic_test {
     }
 
     fn mk_net() -> Network {
-        Network::new(5, 10)
+        Network::new(5)
     }
 
     #[test]
     fn network_empty() {
-        let mut net: Network = Network::new(0, 10);
+        let mut net: Network = Network::new(0);
         send_requests(&mut net, 5);
         match net.tick() {
             Ok(_res) => panic!("Should fail with no nodes"),
@@ -68,7 +68,7 @@ mod network_basic_test {
 
     #[test]
     fn node_remove() {
-        let mut net = Network::new(2, 5);
+        let mut net = Network::new(2);
         match net.remove_node(1).unwrap().join() {
             Ok(_) => {},
             Err(e) => panic!(e),
@@ -121,7 +121,7 @@ mod network_interaction_test {
 
     #[test]
     fn preprepare_should_reach_node() {
-        let mut net = Network::new(2, 5);
+        let mut net = Network::new(2);
         let sender = 0 as ID;
         let target = 1 as ID;
         net.queue_add(Message::preprepare(

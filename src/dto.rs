@@ -1,11 +1,9 @@
-use std::option::Option;
 
 pub type ID = u64;
 pub type NodeID = ID;
 pub type Sig = ID; // Signature. ID of the node that signed it. invalid ID -> nobody signed it.
 pub type Digest = String; // Hash of something
-pub type TipMessage = String; // current progress of Nodes
-pub type Tip = Option<TipMessage>; // current progress of Nodes
+pub type Tip = String; // current progress of Nodes
 
 /*
 Parameters:
@@ -20,7 +18,7 @@ pub struct PrePrepare {
     seq_id: ID,     // n
     digest: Digest,  // d -- digest for m
     signature: Sig,  // sigma(p) -- sig of primary node
-    message: TipMessage,    // m
+    message: Tip,    // m
     sender_id: NodeID,    // i // Not present in the original protocol
 }
 
@@ -55,7 +53,7 @@ impl PrePrepare {
         seq_id: ID,     // n
         digest: Digest,  // d -- digest for m
         signature: Sig,  // sigma(p) -- sig of primary node
-        message: TipMessage,    // m
+        message: Tip,    // m
         sender_id: NodeID,
     ) -> PrePrepare {
         PrePrepare{
@@ -66,6 +64,9 @@ impl PrePrepare {
             message: message,    // m
             sender_id: sender_id,
         }
+    }
+    pub fn get_message(&self) -> Tip {
+        self.message.clone()
     }
     pub fn make_prepare(&self, sender_id: NodeID, sender_digest: String) -> Prepare {
         Prepare::new(
@@ -94,9 +95,15 @@ impl Prepare {
             signature: signature,  // sigma(i) -- Sig of sending node
         }
     }
-    //pub fn make_commit(&self, sender_id: ID) -> Commit {
-    //    Commit::new(1,1,"".to_owned(),1,1)
-    //}
+    pub fn make_commit(&self, sender_id: NodeID, sender_digest: String) -> Commit {
+        Commit::new(
+            self.view_id,
+            self.seq_id,
+            sender_digest,
+            sender_id,
+            sender_id
+        )
+    }
 }
 
 impl Commit {

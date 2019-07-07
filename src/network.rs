@@ -25,12 +25,12 @@ fn create_nodes(size: usize) -> (HashMap<ID, NodeCtrl>, Receiver<Message>) {
 }
 
 impl Network {
-    pub fn new(size: usize, buffer_size: usize) -> Network {
+    pub fn new(size: usize) -> Network {
         let (nodes, inter_receiver) = create_nodes(size);
         Network{
             nodes: nodes,
             inter_receiver: inter_receiver,
-            queue: VecDeque::with_capacity(buffer_size),
+            queue: VecDeque::new(),
         }
     }
 
@@ -49,10 +49,33 @@ impl Network {
         }
     }
 
+    pub fn tick_queue_all(&mut self) {
+        while !self.queue.is_empty() {
+            let _ = self.tick();
+        }
+    }
+
     pub fn queue_update(&mut self) {
         for _ in 0..10 {
             match self.inter_receiver.try_recv() {
                 Ok(message) => self.queue.push_back(message),
+                Err(err_type) => {
+                    match err_type {
+                        TryRecvError::Disconnected => println!("[Network] Receiver shut down"),
+                        TryRecvError::Empty => {}
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    pub fn tick_until_empty_skip_queue(&mut self) {
+        loop {
+            match self.inter_receiver.try_recv() {
+                Ok(message) => {
+                    let _= self.send(message);
+                },
                 Err(err_type) => {
                     match err_type {
                         TryRecvError::Disconnected => println!("[Network] Receiver shut down"),
@@ -104,5 +127,9 @@ impl Network {
 
     pub fn get_queue<'a>(&'a self) -> impl Iterator<Item = &Message> + 'a {
         self.queue.iter()
+    }
+
+    pub fn get_nodes(&self) -> HashSet<ID> {
+        self.nodes.keys().map(|k| *k).collect()
     }
 }
