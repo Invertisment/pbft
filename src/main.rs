@@ -6,6 +6,7 @@ mod dto_test;
 mod network;
 mod network_test;
 mod node;
+mod node_test;
 mod reqtable;
 mod reqtable_test;
 mod sufficiency;
@@ -13,9 +14,12 @@ mod sufficiency_test;
 mod test_util;
 mod util;
 use network::Network;
-use crate::dto::{ID,Commit};
+use crate::dto::{PrePrepare};
 use crate::node::{Message};
+use std::sync::{Arc,RwLock};
 use std::env;
+use std::thread;
+use std::time::Duration;
 
 fn print_statuses(net: &Network) {
     println!("----- Statuses: ------");
@@ -32,13 +36,20 @@ fn print_queue<'l>(net: &Network) {
 }
 
 fn queue_requests(net: &mut Network) {
-    for i in 0..5 {
-        net.queue_add(
-            Message::commit(
-                100,
-                i as ID,
-                Commit::new(1 as ID, 1 as ID, String::from(format!("digest {}", i)), i as ID, i as ID)));
-    }
+    let sender_id = 0;
+    let target_id = 1;
+    net.queue_add(
+            Message::preprepare(
+                sender_id,
+                target_id,
+                Arc::new(RwLock::new(PrePrepare::new(
+                    0,
+                    1,
+                    util::digest(sender_id),
+                    sender_id,
+                    "Advanced tip message".to_owned(),
+                    sender_id)))));
+
 }
 
 fn is_interactive_ui(args: &mut env::Args) -> bool {
@@ -57,7 +68,10 @@ fn main() {
     for _i in 0..5 {
         print_queue(&net);
         print_statuses(&net);
+        println!("Ticking");
+        net.queue_update();
         let _res = net.tick();
+        thread::sleep(Duration::from_millis(100));
     }
 }
 

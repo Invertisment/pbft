@@ -2,6 +2,7 @@
 #[cfg(test)]
 mod network_basic_test {
 
+    use std::sync::{Arc,RwLock};
     use crate::dto::{ID,Commit};
     use crate::node::{Message};
     use crate::network::{Network};
@@ -12,7 +13,7 @@ mod network_basic_test {
             Message::commit(
                 100,
                 i as ID,
-                Commit::new(1, 1, String::from(format!("digest {}", i)), i as ID, i as ID)));
+                Arc::new(RwLock::new(Commit::new(1, 1, String::from(format!("digest {}", i)), i as ID, i as ID)))));
         }
     }
 
@@ -90,7 +91,7 @@ mod network_interaction_test {
     use crate::dto::{ID,PrePrepare};
     use crate::node::{Message,NodeCtrl,State};
     use crate::network::{Network};
-    use std::sync::{Mutex,Arc};
+    use std::sync::{Mutex,Arc,RwLock};
     use crate::reqtable::RequestTable;
     use std::time::Duration;
     use std::thread;
@@ -126,7 +127,7 @@ mod network_interaction_test {
         net.queue_add(Message::preprepare(
             sender,
             target,
-            PrePrepare::new(0, 1, "digest".to_owned(), sender, "message".to_owned(), sender)));
+            Arc::new(RwLock::new(PrePrepare::new(0, 1, "digest".to_owned(), sender, "message".to_owned(), sender)))));
         match get_preprepare_size(net.get_node(&target)) {
             Ok(size) => assert_eq!(size, 0),
             Err(msg) => panic!(msg),

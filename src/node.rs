@@ -1,16 +1,16 @@
-use crate::dto::{PrePrepare,Prepare,Commit,ID,Tip,Shutdown,NodeRequest};
+use crate::dto::{PrePrepare,Prepare,Commit,NodeID,ID,Tip,Shutdown,NodeRequest};
 use std::sync::mpsc;
 use std::sync::mpsc::{Sender,Receiver};
 use std::option::Option;
 use std::thread;
 use std::thread::JoinHandle;
-use std::sync::{Arc,Mutex,RwLock};
+use std::sync::{Arc,Mutex,RwLock,RwLockReadGuard};
 use std::collections::HashSet;
 use std::result::{Result};
 use crate::util::find_others;
 use crate::reqtable::RequestTable;
 use crate::sufficiency::{one,two_thirds};
-use crate::util::convert_err;
+use crate::util::{convert_err,digest};
 
 #[derive(Debug)]
 pub struct State {
@@ -52,11 +52,22 @@ impl State {
         &self.commits
     }
 
+    fn send<M>(&self, me: ID, data_sender: Sender<Message>, conversion_fn: fn(ID, ID, Arc<RwLock<M>>) -> Message, request: Arc<RwLock<M>>) {
+        // Error handling: fire and forget - UDP mode
+        for m in Message::multiply(conversion_fn, request, me, &self.known_nodes) {
+            //println!("[{:?}] Sending to network", me);
+            let res = data_sender.send(m);
+            if res.is_err() {
+                println!("[{:?}] Send error: {:?}", me, res.err())
+            }
+        }
+    }
+
     fn is_valid_next_seq(&self, req: &NodeRequest) -> bool {
         req.get_seq_id() > self.seq_id
     }
 
-    fn handle_preprepare(&mut self, me: ID, message: Arc<RwLock<PrePrepare>>, _data_sender: Sender<Message>) -> Result<(), String> {
+    fn handle_preprepare(&mut self, me: ID, message: Arc<RwLock<PrePrepare>>, data_sender: Sender<Message>) -> Result<(), String> {
         // Did we sent any preprepares for this round? We should send only one next preprepare
         if self.sent_preprepare.is_some() {
             return Ok(())
@@ -65,19 +76,34 @@ impl State {
         if result.is_err() {
             return result;
         }
-        convert_err(message.read()).map(|message_lock| {
+        convert_err(message.read()).map(|_message_lock| {
+            let message_lock: RwLockReadGuard<PrePrepare> = _message_lock;
             // Was the inserted message valid?
-            println!("[{:?}] Preprepare sufficiency {:?}", me, self.preprepares.is_sufficient(&message_lock, &self.known_nodes));
+            //println!("[{:?}] Preprepare sufficiency {:?}", me, self.preprepares.is_sufficient(&message_lock, &self.known_nodes));
             if !self.preprepares.is_sufficient(&message_lock, &self.known_nodes) {
+                println!("[{:?}] Preprepare drop: message from invalid node", me);
                 return
             }
             // seq_id must point to the future one
             if !self.is_valid_next_seq(&*message_lock) {
-                println!("[{:?}] Preprepare dropped", me);
+                println!("[{:?}] Preprepare drop: next seq is invalid", me);
                 return;
             }
-            // sufficient and fresh preprepare
-            println!("[{:?}] Preprepare is sufficient! Sending to {:?}", me, self.known_nodes);
+            // if we've sent anything we shouldn't send anything twice
+            if self.sent_prepare.is_some() {
+                println!("[{:?}] Preprepare drop: next seq is invalid", me);
+                return;
+            }
+            // new prepare
+            let prepare = Arc::new(RwLock::new(message_lock.make_prepare(me, digest(me))));
+            // handle our new prepare internally
+            let res = self.handle_prepare(me, prepare.clone(), data_sender.clone());
+            if res.is_err() {
+                println!("[{:?}] Prepare insertion err {:?}", me, res.err());
+                return;
+            }
+            //println!("[{:?}] Preprepare is sufficient! Sending to {:?}", me, self.known_nodes);
+            self.send(me, data_sender, Message::prepare, prepare);
         })
     }
 
@@ -100,7 +126,7 @@ impl State {
     }
 
     pub fn handle_protocol_message(&mut self, me: ID, message: Message, data_sender: Sender<Message>) -> Result<(), String> {
-        print!("new message! {:?}", &message);
+        //print!("new message! {:?}", &message);
         // TODO: Not sure how to make a for loop here; don't want to create new structs
         if message.preprepare.is_some() {
             return self.handle_preprepare(me, message.preprepare.unwrap(), data_sender)
@@ -115,14 +141,10 @@ impl State {
     }
 }
 
-fn wrap_to_arc_option<T>(t: T) -> Option<Arc<RwLock<T>>> {
-    Option::Some(Arc::new(RwLock::new(t)))
-}
-
 #[derive(Debug)]
 pub struct Message {
-    sender_id: ID,
-    target_id: ID,
+    sender_id: NodeID,
+    target_id: NodeID,
     preprepare: Option<Arc<RwLock<PrePrepare>>>,
     prepare: Option<Arc<RwLock<Prepare>>>,
     commit: Option<Arc<RwLock<Commit>>>,
@@ -130,48 +152,53 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn preprepare(sender_id: ID, target_id: ID, pp: PrePrepare) -> Message {
+    pub fn multiply<'a, M>(conversion_fn: fn(NodeID, NodeID, Arc<RwLock<M>>) -> Message, req: Arc<RwLock<M>>, sender: NodeID, nodes: &'a HashSet<ID>) -> impl Iterator<Item = Message> + 'a where M: 'a {
+        nodes.iter().map(move |target_node_id| {
+            conversion_fn(sender, *target_node_id, req.clone())
+        })
+    }
+    pub fn preprepare(sender_id: NodeID, target_id: ID, pp: Arc<RwLock<PrePrepare>>) -> Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
-            preprepare: wrap_to_arc_option(pp),
+            preprepare: Option::from(pp),
             prepare: Option::None,
             commit: Option::None,
             shutdown: Option::None,
         }
     }
-    pub fn prepare(sender_id: ID, target_id: ID, p: Prepare) -> Message {
+    pub fn prepare(sender_id: NodeID, target_id: ID, p: Arc<RwLock<Prepare>>) -> Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
             preprepare: Option::None,
-            prepare: wrap_to_arc_option(p),
+            prepare: Option::from(p),
             commit: Option::None,
             shutdown: Option::None,
         }
     }
-    pub fn commit(sender_id: ID, target_id: ID, c: Commit) -> Message {
+    pub fn commit(sender_id: NodeID, target_id: ID, c: Arc<RwLock<Commit>>) -> Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
             preprepare: Option::None,
             prepare: Option::None,
-            commit: wrap_to_arc_option(c),
+            commit: Option::from(c),
             shutdown: Option::None,
         }
     }
-    pub fn shutdown(sender_id: ID, target_id: ID, s: Shutdown) -> Message {
+    pub fn shutdown(sender_id: NodeID, target_id: ID, s: Arc<RwLock<Shutdown>>) -> Message {
         Message{
             sender_id: sender_id,
             target_id: target_id,
             preprepare: Option::None,
             prepare: Option::None,
             commit: Option::None,
-            shutdown: wrap_to_arc_option(s),
+            shutdown: Option::from(s),
         }
     }
 
-    pub fn get_target_id(&self) -> ID {
+    pub fn get_target_id(&self) -> NodeID {
         self.target_id
     }
 }
@@ -183,18 +210,17 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn spawn(id: ID, known_nodes: &HashSet<ID>) -> NodeCtrl {
+    pub fn spawn(id: ID, known_nodes: &HashSet<ID>, inter_sender: Sender<Message>) -> NodeCtrl {
         let (data_sender, data_receiver) = mpsc::channel();
         let state = State::genesis(find_others(id, known_nodes.iter()).collect());
         let state_clone = state.clone();
-        let data_sender_clone = data_sender.clone();
         let join_handle = thread::spawn(
             move || {
                 let node = Node {
                     id: id,
                     state: state.clone(),
                 };
-                node.handle_all_requests(data_receiver, data_sender_clone)
+                node.handle_all_requests(data_receiver, inter_sender)
                 });
         NodeCtrl {
             join_handle: join_handle,
