@@ -4,6 +4,9 @@ Let's learn Rust
 
 The application doesn't implement views and master-node.
 The `Network` object acts as a master-node object for the current view.
+Signatures are not checked, digests are hardcoded.
+
+Logic of PBFT is found in `node.rs`, `State` struct.
 
 #### The app has two modes of running:
 1. non-interactive smoke-test mode
