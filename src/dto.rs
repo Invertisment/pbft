@@ -89,7 +89,7 @@ impl Prepare {
             signature: sender_id,  // sigma(i) -- Sig of sending node
         }
     }
-    pub fn make_commit(&self, sender_id: NodeID, sender_digest: String) -> Commit {
+    pub fn make_commit(&self, sender_id: NodeID) -> Commit {
         Commit::new(
             self.view_id,
             self.seq_id,

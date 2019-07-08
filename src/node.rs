@@ -10,7 +10,7 @@ use std::result::{Result};
 use crate::util::find_others;
 use crate::reqtable::RequestTable;
 use crate::sufficiency::{one,two_thirds};
-use crate::util::{convert_err,digest};
+use crate::util::{convert_err};
 
 #[derive(Debug)]
 pub struct State {
@@ -141,7 +141,7 @@ impl State {
                 return;
             }
             // new prepare
-            let commit = Arc::new(RwLock::new(message_lock.make_commit(me, digest(me))));
+            let commit = Arc::new(RwLock::new(message_lock.make_commit(me)));
             // handle our new prepare internally
             let res = self.handle_commit(me, commit.clone(), data_sender.clone());
             if res.is_err() {
