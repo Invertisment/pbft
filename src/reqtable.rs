@@ -102,8 +102,6 @@ fn get_by_arc_hit() {
     let ppre = Commit::new(
         400,
         400,
-        "Digest".to_owned(),
-        400,
         400);
     let arc = Arc::new(RwLock::new(ppre));
     let mut rt: RequestTable<Commit> = RequestTable::new(two_thirds);
@@ -121,8 +119,6 @@ fn get_by_arc_miss() {
     use crate::dto::{Commit};
     let ppre = Commit::new(
         400,
-        400,
-        "Digest".to_owned(),
         400,
         400);
     let arc = Arc::new(RwLock::new(ppre));

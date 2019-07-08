@@ -51,16 +51,14 @@ impl PrePrepare {
     pub fn new(
         view_id: ID,    // v
         seq_id: ID,     // n
-        digest: Digest,  // d -- digest for m
-        signature: Sig,  // sigma(p) -- sig of primary node
         message: Tip,    // m
         sender_id: NodeID,
     ) -> PrePrepare {
         PrePrepare{
             view_id: view_id,    // v
             seq_id: seq_id,     // n
-            digest: digest,  // d -- digest for m
-            signature: signature,  // sigma(i) -- Sig of sending node
+            digest: "digest".to_owned(),  // d -- digest for m
+            signature: sender_id,  // sigma(i) -- Sig of sending node
             message: message,    // m
             sender_id: sender_id,
         }
@@ -68,12 +66,10 @@ impl PrePrepare {
     pub fn get_message(&self) -> Tip {
         self.message.clone()
     }
-    pub fn make_prepare(&self, sender_id: NodeID, sender_digest: String) -> Prepare {
+    pub fn make_prepare(&self, sender_id: NodeID) -> Prepare {
         Prepare::new(
             self.view_id,
             self.seq_id,
-            sender_digest,
-            sender_id,
             sender_id
         )
     }
@@ -83,24 +79,20 @@ impl Prepare {
     pub fn new(
         view_id: ID,    // v
         seq_id: ID,     // n
-        digest: Digest,  // d -- digest for m
         sender_id: NodeID,    // i
-        signature: Sig,  // sigma(i) -- Sig of sending node
     ) -> Prepare {
         Prepare{
             view_id: view_id,    // v
             seq_id: seq_id,     // n
-            digest: digest,  // d -- digest for m
+            digest: "digest".to_owned(),  // d -- digest for m
             sender_id: sender_id,
-            signature: signature,  // sigma(i) -- Sig of sending node
+            signature: sender_id,  // sigma(i) -- Sig of sending node
         }
     }
     pub fn make_commit(&self, sender_id: NodeID, sender_digest: String) -> Commit {
         Commit::new(
             self.view_id,
             self.seq_id,
-            sender_digest,
-            sender_id,
             sender_id
         )
     }
@@ -110,16 +102,14 @@ impl Commit {
     pub fn new(
         view_id: ID,    // v
         seq_id: ID,     // n
-        digest: Digest,  // d -- digest for m
         sender_id: NodeID,    // i
-        signature: Sig,  // sigma(i) -- Sig of sending node
     ) -> Commit {
         Commit{
             view_id: view_id,    // v
             seq_id: seq_id,     // n
-            digest: digest,  // d -- digest for m
+            digest: "digest".to_owned(),  // d -- digest for m
             sender_id: sender_id,    // i
-            signature: signature,  // sigma(i) -- Sig of sending node
+            signature: sender_id,  // sigma(i) -- Sig of sending node
         }
     }
 }

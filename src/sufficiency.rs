@@ -11,10 +11,15 @@ pub type SufficiencyChecker = fn(&HashSet<ID>, &HashSet<ID>) -> bool;
 // accepted_61 = 2 * f_61 + 1 = 2 * 20 + 1 = 41
 // At least 41 nodes of 61 have to accept to have a valid outcome
 pub fn two_thirds(all_nodes: &HashSet<ID>, approver_nodes: &HashSet<ID>) -> bool {
+    //let approvers = clean_noise_approvers(all_nodes, approver_nodes).count();
+    //let threshold = ((all_nodes.len()) * 2) / 3;
+    //println!("[approve] two_thirds: {}/{}; all: {}", approvers, threshold, all_nodes.len());
     clean_noise_approvers(all_nodes, approver_nodes).count() > (((all_nodes.len()) * 2) / 3)
 }
 
 pub fn one(all_nodes: &HashSet<ID>, approver_nodes: &HashSet<ID>) -> bool {
+    //let approvers = clean_noise_approvers(all_nodes, approver_nodes).count();
+    //println!("[approve] one: {}/1; approvers-dirty: {:?}; all: {:?}", approvers, approver_nodes, all_nodes);
     let clean: Vec<&ID> = clean_noise_approvers(all_nodes, approver_nodes)
         .take(1)
         .collect();

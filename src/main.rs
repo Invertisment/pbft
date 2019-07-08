@@ -33,8 +33,6 @@ fn queue_requests(net: &mut Network) {
                 Arc::new(RwLock::new(PrePrepare::new(
                     0,
                     1,
-                    util::digest(sender_id),
-                    sender_id,
                     "Advanced tip message".to_owned(),
                     sender_id)))));
 }

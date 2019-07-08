@@ -11,8 +11,6 @@ pub fn new_random_preprepare() -> PrePrepare {
     PrePrepare::new(
         random(),    // v
         random(),     // n
-        "sample text".to_owned(),  // d -- digest for m
-        sender_id,  // sigma(p) -- sig of primary node
         "Tip message".to_owned(),    // m
         sender_id,
     )
@@ -22,8 +20,6 @@ pub fn new_req(view: ID, seq: ID, sender: ID) -> Commit {
     Commit::new(
         view as ID,
         seq as ID,
-        format!("Digest {} {}", view, seq).to_owned(),
-        sender as ID,
         sender as ID)
 }
 

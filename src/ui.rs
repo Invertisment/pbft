@@ -62,8 +62,6 @@ pub fn new_preprepare<'l>(net: &mut Network) {
         Arc::new(RwLock::new(PrePrepare::new(
             0,
             seq_id.unwrap(),
-            "".to_owned(),
-            1337,
             message,
             sender_id))),
         sender_id,

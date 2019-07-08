@@ -16,7 +16,8 @@ use crate::util::{convert_err,digest};
 pub struct State {
     tip: Tip, // current consensus viewpoint of the node
     seq_id: ID,
-    known_nodes: HashSet<ID>,
+    remaining_nodes: HashSet<ID>,
+    all_nodes: HashSet<ID>,
     preprepares: RequestTable<PrePrepare>,
     prepares: RequestTable<Prepare>,
     commits: RequestTable<Commit>,
@@ -26,14 +27,16 @@ pub struct State {
 }
 
 impl State {
-    pub fn genesis(known_nodes: HashSet<ID>) -> Arc<Mutex<State>> {
+    pub fn genesis(me: ID, all_nodes: HashSet<ID>) -> Arc<Mutex<State>> {
+        let remaining_nodes = find_others(me, all_nodes.iter()).collect();
         Arc::new(Mutex::new(State{
             tip: "genesis".to_owned(),
             seq_id: 0,
             preprepares: RequestTable::new(one),
             prepares: RequestTable::new(two_thirds),
             commits: RequestTable::new(two_thirds),
-            known_nodes: known_nodes,
+            remaining_nodes: remaining_nodes,
+            all_nodes: all_nodes,
             sent_preprepare: None,
             sent_prepare: None,
             sent_commit: None
@@ -54,7 +57,7 @@ impl State {
 
     fn send<M>(&self, me: ID, data_sender: Sender<Message>, conversion_fn: fn(ID, ID, Arc<RwLock<M>>) -> Message, request: Arc<RwLock<M>>) {
         // Error handling: fire and forget - UDP mode
-        for m in Message::multiply(conversion_fn, request, me, &self.known_nodes) {
+        for m in Message::multiply(conversion_fn, request, me, &self.remaining_nodes) {
             //println!("[{:?}] Sending to network", me);
             let res = data_sender.send(m);
             if res.is_err() {
@@ -75,12 +78,14 @@ impl State {
         reqs.append(message.clone())
     }
 
-    fn validate_message<M>(&self,me: ID, reqs: &RequestTable<M>,  message: &M) -> bool
-    where M: NodeRequest + std::fmt::Debug  {
-        println!("[{:?}: {} -> {}; [{:?}]] Msg: {:?}", me, me, message.get_sender_id(), self.known_nodes, message);
+    fn validate_message<M, N>(&self,me: ID, reqs: &RequestTable<M>,  message: &N) -> bool
+    where M: NodeRequest + std::fmt::Debug,
+          N: NodeRequest + std::fmt::Debug
+    {
+        println!("[{:?}: {} -> {}; [{:?}]] Msg: {:?}", me, me, message.get_sender_id(), self.all_nodes, message);
         // Was the inserted message valid?
-        //println!("[{:?}] Preprepare sufficiency {:?}", me, self.preprepares.is_sufficient(&message_lock, &self.known_nodes));
-        if !reqs.is_sufficient(message, &self.known_nodes) {
+        //println!("[{:?}] Preprepare sufficiency {:?}", me, self.preprepares.is_sufficient(&message_lock, &self.all_nodes));
+        if !reqs.is_sufficient(message, &self.all_nodes) {
             println!("[{:?}] Drop: message doesn't have enough approvers", me);
             return false
         }
@@ -108,14 +113,14 @@ impl State {
                 return;
             }
             // new prepare
-            let prepare = Arc::new(RwLock::new(message_lock.make_prepare(me, digest(me))));
+            let prepare = Arc::new(RwLock::new(message_lock.make_prepare(me)));
             // handle our new prepare internally
             let res = self.handle_prepare(me, prepare.clone(), data_sender.clone());
             if res.is_err() {
                 println!("[{:?}] Prepare insertion err {:?}", me, res.err());
                 return;
             }
-            //println!("[{:?}] Preprepare is sufficient! Sending to {:?}", me, self.known_nodes);
+            //println!("[{:?}] Preprepare is sufficient! Sending to {:?}", me, self.all_nodes);
             self.send(me, data_sender, Message::prepare, prepare);
         })
     }
@@ -127,7 +132,7 @@ impl State {
         }
         convert_err(message.read()).map(|_message_lock| {
             let message_lock: RwLockReadGuard<Prepare> = _message_lock;
-            if !self.validate_message(me, &self.prepares, &*message_lock) {
+            if !self.validate_message(me, &self.preprepares, &*message_lock) {
                 return;
             }
             // if we've sent anything we shouldn't send anything twice
@@ -143,15 +148,15 @@ impl State {
                 println!("[{:?}] Prepare insertion err {:?}", me, res.err());
                 return;
             }
-            //println!("[{:?}] Prepare is sufficient! Sending to {:?}", me, self.known_nodes);
+            //println!("[{:?}] Prepare is sufficient! Sending to {:?}", me, self.all_nodes);
             self.send(me, data_sender, Message::commit, commit);
         })
     }
 
     fn update_tip(&mut self, me: ID, commit: &Commit) {
         // check that all preprepares and prepares exist
-        if !self.preprepares.is_sufficient(commit, &self.known_nodes)
-            && !self.prepares.is_sufficient(commit, &self.known_nodes) {
+        if !self.preprepares.is_sufficient(commit, &self.all_nodes)
+            && !self.prepares.is_sufficient(commit, &self.all_nodes) {
                 println!("[{:?}] Commit ignore: previous requests are not sufficient", me);
                 return
             }
@@ -174,7 +179,7 @@ impl State {
         }
         convert_err(message.read()).map(|_message_lock| {
             let message_lock: RwLockReadGuard<Commit> = _message_lock;
-            if !self.validate_message(me, &self.commits, &*message_lock) {
+            if !self.validate_message(me, &self.prepares, &*message_lock) {
                 return;
             }
             // if we've sent anything we shouldn't send anything twice
@@ -272,9 +277,9 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn spawn(id: ID, known_nodes: &HashSet<ID>, inter_sender: Sender<Message>) -> NodeCtrl {
+    pub fn spawn(id: ID, all_nodes: &HashSet<ID>, inter_sender: Sender<Message>) -> NodeCtrl {
         let (data_sender, data_receiver) = mpsc::channel();
-        let state = State::genesis(find_others(id, known_nodes.iter()).collect());
+        let state = State::genesis(id, all_nodes.iter().map(|i| *i).collect());
         let state_clone = state.clone();
         let join_handle = thread::spawn(
             move || {

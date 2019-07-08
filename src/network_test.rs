@@ -13,7 +13,7 @@ mod network_basic_test {
             Message::commit(
                 100,
                 i as ID,
-                Arc::new(RwLock::new(Commit::new(1, 1, String::from(format!("digest {}", i)), i as ID, i as ID)))));
+                Arc::new(RwLock::new(Commit::new(1, 1, i as ID)))));
         }
     }
 
@@ -127,7 +127,7 @@ mod network_interaction_test {
         net.queue_add(Message::preprepare(
             sender,
             target,
-            Arc::new(RwLock::new(PrePrepare::new(0, 1, "digest".to_owned(), sender, "message".to_owned(), sender)))));
+            Arc::new(RwLock::new(PrePrepare::new(0, 1, "message".to_owned(), sender)))));
         match get_preprepare_size(net.get_node(&target)) {
             Ok(size) => assert_eq!(size, 0),
             Err(msg) => panic!(msg),
