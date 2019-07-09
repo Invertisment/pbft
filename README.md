@@ -5,6 +5,7 @@ Let's learn Rust
 The application doesn't implement views and master-node.
 The `Network` object acts as a master-node object for the current view.
 Signatures are not checked, digests are hardcoded.
+Upon successful update of the node value nothing is transmitted back to the user (the UI does print the current state of the node, it can be found by hand).
 
 Logic of PBFT is found in `node.rs`, `State` struct.
 
